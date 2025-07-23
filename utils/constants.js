@@ -1,0 +1,1 @@
+export const PREFIX = "&9[&aTQoL&9]&r ";
