@@ -1,4 +1,5 @@
 /// <reference types="../CTAutocomplete" />
+
 import { PREFIX } from "../utils/constants";
 
 register("command", (name) => {
@@ -7,7 +8,7 @@ register("command", (name) => {
         return;
     }
     ChatLib.command(`p transfer ${name}`);
-}).setName('pt').setAliases(['ptrans', 'ptransfer', 'ptr']);
+}).setName('pt', true).setAliases(['ptrans', 'ptransfer', 'ptr']);
 
 register("command", () => {
     ChatLib.command("p disband");

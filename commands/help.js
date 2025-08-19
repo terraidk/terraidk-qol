@@ -1,4 +1,5 @@
 /// <reference types="../CTAutocomplete" />
+
 import { PREFIX } from "../utils/constants";
 
 const COMMAND_LIST = [

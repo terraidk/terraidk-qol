@@ -1,3 +1,5 @@
+/// <reference types="../CTAutocomplete" />
+
 import { PREFIX } from "../utils/constants";
 
 const reminderFile = new java.io.File("config/ChatTriggers/modules/terraidk-qol/reminders.json");
