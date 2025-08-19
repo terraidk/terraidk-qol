@@ -2,7 +2,7 @@
   "name": "terraidk's QoL",
   "creator": "terraidk",
   "description": "A quality of life mod that adds shortcuts to common commands. (for now)",
-  "version": "0.1.1",
+  "version": "0.1.3",
   "entry": "index.js",
   "requires": []
 }
