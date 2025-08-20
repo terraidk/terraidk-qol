@@ -11,6 +11,7 @@ import "./menus/shortcuts";
 import { PREFIX } from "./utils/constants";
 
 function getModuleFolder() {
+    // I FUCKING HATE CHATTRIGGERS API WHAT IS THIS SHIT -jesse
     const File = Java.type("java.io.File");
     const modulesDir = new File("config/ChatTriggers/modules/");
     const folders = modulesDir.listFiles();
