@@ -2,7 +2,7 @@
   "enablePartyTransfer": true,
   "enablePartyDisband": true,
   "enableLobbyHousing": true,
-  "enableParkourCheckpoint": false,
+  "enableParkourCheckpoint": true,
   "enablePartyWarp": true,
   "enableVariables": true,
   "enableSelfVariables": true,

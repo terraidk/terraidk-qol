@@ -270,15 +270,6 @@ class GridMenu {
         
         gui.open();
         this.gui = gui;
-
-        setTimeout(() => {
-            if (this.gui && this.gui.get()) {
-                try {
-                    const mc = Client.getMinecraft();
-                } catch (e) {}                
-            }
-        }, 1);
-
     }
     
     executeButton(index) {
