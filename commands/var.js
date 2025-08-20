@@ -1,10 +1,11 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import config, { registerToggledCommand } from "../utils/command_config.js";
 
 const actions = ["list", "inc", "increment", "dec", "decrement", "set", "unset"];
 
-register("command", (...args) => {
+registerToggledCommand("enableVariables", (...args) => {
     if (args.length < 2) {
         ChatLib.chat(PREFIX + "&cUsage: /var <global|playername> <list|inc|dec|set|unset> <var> [value] &7| &7&oNeed help? -> &b/tqol");
         return;
@@ -50,10 +51,10 @@ register("command", (...args) => {
     const isGlobal = target.toLowerCase() === "global";
     const cmd = `var ${isGlobal ? "global" : "player"} ${action} ${isGlobal ? "" : target}${variable ? " " + variable : ""}${value ? " " + value : ""}`;
     ChatLib.command(cmd.trim());
-}).setName("var");
+}, "var");
 
 // /selfvar command (for current player)
-register("command", (...args) => {
+registerToggledCommand("enableSelfVariables", (...args) => {
     const player = Player.getName();
     if (args.length < 1) {
         ChatLib.chat(PREFIX + "&cUsage: /selfvar <list|inc|dec|set|unset> <var> [value]");
@@ -83,4 +84,4 @@ register("command", (...args) => {
 
     const cmd = `var player ${action} ${player}${variable ? " " + variable : ""}${value ? " " + value : ""}`;
     ChatLib.command(cmd.trim());
-}).setName("selfvar");
+}, "selfvar");

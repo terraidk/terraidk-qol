@@ -1,9 +1,10 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import config, { registerToggledCommand } from "../utils/command_config.js";
 
-
-register("command", function(...args) {
+// /func main handler
+registerToggledCommand("enableFunc", function(...args) {
     if (!args || args.length === 0) {
         ChatLib.chat(PREFIX + "&cUsage: /func <create|run|edit|delete> <name>");
         return;
@@ -53,31 +54,32 @@ register("command", function(...args) {
         default:
             ChatLib.chat(PREFIX + "&cUnknown subcommand. Use create, run, or delete.");
     }
-}).setName("func");
+}, "func");
 
-// Aliases
-register("command", (name) => {
+// /fc, /fr, /fe, /fd
+registerToggledCommand("enableFuncAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a function name to create");
     ChatLib.command(`function create ${name}`);
-}).setName("fc", true);
+}, "fc", true);
 
-register("command", (name) => {
+registerToggledCommand("enableFuncAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a function name to run");
     ChatLib.command(`function run ${name}`);
-}).setName("fr", true);
+}, "fr", true);
 
-register("command", (name) => {
+registerToggledCommand("enableFuncAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a function name to edit");
     ChatLib.command(`function edit ${name}`);
-}).setName("fe", true);
+}, "fe", true);
 
-register("command", (name) => {
+registerToggledCommand("enableFuncAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a function name to delete");
     ChatLib.command(`function delete ${name}`);
-}).setName("fd", true);
+}, "fd", true);
 
-
-register("command", function(...args) {
+// /region main handler
+registerToggledCommand("enableRegion", function(...args) {
+    if (!config.enableRegion) return;
     if (!args || args.length === 0) {
         ChatLib.chat(PREFIX + "&cUsage: /region <create|edit|delete> <name>");
         return;
@@ -109,25 +111,27 @@ register("command", function(...args) {
         default:
             ChatLib.chat(PREFIX + "&cUnknown subcommand. Use create, edit, or delete.");
     }
-}).setName("region");
+}, "region");
 
-register("command", (name) => {
+// /rc, /re, /rd
+registerToggledCommand("enableRegionAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a region name to create");
     ChatLib.command(`region create ${name}`);
-}).setName("rc", true);
+}, "rc", true);
 
-register("command", (name) => {
+registerToggledCommand("enableRegionAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a region name to edit");
     ChatLib.command(`region edit ${name}`);
-}).setName("re", true);
+}, "re", true);
 
-register("command", (name) => {
+registerToggledCommand("enableRegionAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a region name to delete");
     ChatLib.command(`region delete ${name}`);
-}).setName("rd", true);
+}, "rd", true);
 
 // handler for /command and /cmd
 function handleCommand(...args) {
+    if (!config.enableCommand) return;
     if (!args || args.length === 0) {
         ChatLib.chat(PREFIX + "&cUsage: /command <create|edit|actions|delete> <name>");
         return;
@@ -170,32 +174,42 @@ function handleCommand(...args) {
     }
 }
 
-register("command", handleCommand).setName("command");
-register("command", handleCommand).setName("cmd");
+// /command
+registerToggledCommand("enableCommand", function(...args) {
+    if (!config.enableCommand) return;
+    handleCommand(...args);
+}, "command");
 
-// Shortcuts
-register("command", (name) => {
+// /cmd
+registerToggledCommand("enableCommand", function(...args) {
+    if (!config.enableCommand) return;
+    handleCommand(...args);
+}, "cmd");
+
+// /cc, /ce, /ca, /cd
+registerToggledCommand("enableCommandAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a command name to create");
     ChatLib.command(`command create ${name}`);
-}).setName("cc", true);
+}, "cc", true);
 
-register("command", (name) => {
+registerToggledCommand("enableCommandAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a command name to edit");
     ChatLib.command(`command edit ${name}`);
-}).setName("ce", true);
+}, "ce", true);
 
-register("command", (name) => {
+registerToggledCommand("enableCommandAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a command name to view actions");
     ChatLib.command(`command actions ${name}`);
-}).setName("ca", true);
+}, "ca", true);
 
-register("command", (name) => {
+registerToggledCommand("enableCommandAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a command name to delete");
     ChatLib.command(`command delete ${name}`);
-}).setName("cd", true);
+}, "cd", true);
 
 // Main handler for /menu and /mn
 function handleMenu(...args) {
+    if (!config.enableMenu) return;
     if (!args || args.length === 0) {
         ChatLib.chat(PREFIX + "&cUsage: /menu <create|edit|display|delete> <name>");
         return;
@@ -234,27 +248,35 @@ function handleMenu(...args) {
     }
 }
 
-// Register both main commands
-register("command", handleMenu).setName("menu");
-register("command", handleMenu).setName("mn");
+// /menu
+registerToggledCommand("enableMenu", function(...args) {
+    if (!config.enableMenu) return;
+    handleMenu(...args);
+}, "menu");
 
-// Shortcuts
-register("command", (name) => {
+// /mn
+registerToggledCommand("enableMenu", function(...args) {
+    if (!config.enableMenu) return;
+    handleMenu(...args);
+}, "mn");
+
+// /mc, /me, /md, /mdel
+registerToggledCommand("enableMenuAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a menu name to create");
     ChatLib.command(`menu create ${name}`);
-}).setName("mc", true);
+}, "mc", true);
 
-register("command", (name) => {
+registerToggledCommand("enableMenuAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a menu name to edit");
     ChatLib.command(`menu edit ${name}`);
-}).setName("me", true);
+}, "me", true);
 
-register("command", (name) => {
+registerToggledCommand("enableMenuAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a menu name to display");
     ChatLib.command(`menu display ${name}`);
-}).setName("md", true);
+}, "md", true);
 
-register("command", (name) => {
+registerToggledCommand("enableMenuAliases", (name) => {
     if (!name) return ChatLib.chat(PREFIX + "&cYou must specify a menu name to delete");
     ChatLib.command(`menu delete ${name}`);
-}).setName("mdel", true);
+}, "mdel", true);

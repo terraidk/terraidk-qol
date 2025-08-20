@@ -1,27 +1,29 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import config, { registerToggledCommand } from "../utils/command_config.js";
 
-register("command", (name) => {
+registerToggledCommand("enablePartyTransfer", (name) => {
     if (!name) {
-        ChatLib.chat(PREFIX + "&cYou must specify a player name to transfer the party to! &7| &7&oNeed help? -> &b/tqol");
+        ChatLib.chat(PREFIX + "&cYou must specify a player name to transfer the party to! &7| &7&oNeed help? -> &b/tqol help");
         return;
     }
     ChatLib.command(`p transfer ${name}`);
-}).setName('pt', true).setAliases(['ptrans', 'ptransfer', 'ptr']);
+}, "pt", ["ptrans", "ptransfer", "ptr"]);
 
-register("command", () => {
+registerToggledCommand("enablePartyDisband", () => {
     ChatLib.command("p disband");
-}).setName('pd').setAliases(['pdis', 'pds', 'pdisband', 'pdb']);
+}, "pd", ["pdis", "pds", "pdisband", "pdb"]);
 
-register("command", () => {
+registerToggledCommand("enableLobbyHousing", () => {
     ChatLib.command("l housing");
-}).setName('lh').setAliases('');
+}, "lh");
 
-register("command", () => {
+registerToggledCommand("enableParkourCheckpoint", () => {
     ChatLib.command("parkour checkpoint");
-}).setName('pcp');
+    ChatLib.chat(PREFIX + "&aYou have been teleported to the last checkpoint in your current parkour course! &7| &7&oNeed help? -> &b/tqol help");
+}, "pcp");
 
-register("command", () => {
+registerToggledCommand("enablePartyWarp", () => {
     ChatLib.command("party warp");
-}).setName('pw').setAliases('pwarp');
+}, "pw", ["pwarp"]);

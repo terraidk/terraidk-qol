@@ -1,6 +1,7 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import config, { registerToggledCommand } from "../utils/command_config.js";
 
 const reminderFile = new java.io.File("config/ChatTriggers/modules/terraidk-qol/reminders.json");
 let reminders = loadReminders();
@@ -118,7 +119,9 @@ register("step", () => {
     }
 }).setDelay(1);
 
-register("command", (...args) => {
+registerToggledCommand("enableReminders", (...args) => {
+    if (!config.enableReminders) return;
+
     if (!Array.isArray(args) || args.length < 1) {
         ChatLib.chat(PREFIX + "&cUsage: /remind <1h 20m | HH:MM[am/pm]> <message>");
         return;
@@ -136,9 +139,11 @@ register("command", (...args) => {
     addReminder(parsed.ms, msg);
     ChatLib.chat(PREFIX + `&aReminder set for &b${formattedTime}&a: &e${msg}&a. &7&o/reminders to view.`);
     World.playSound("random.orb", 0.7, 2);
-}).setName("remind").setAliases(["reminder", "remindme"]);
+}, "remind", ["reminder", "remindme"]);
 
-register("command", (...args) => {
+registerToggledCommand("enableReminderList", (...args) => {
+    if (!config.enableReminderList) return;
+
     if (!Array.isArray(args)) args = [];
 
     reminders = reminders.filter(r => Date.now() < r.time && !r.triggered);
@@ -241,4 +246,4 @@ register("command", (...args) => {
     }
 
     ChatLib.chat(PREFIX + "&cUsage: /reminders [delete <#> | edit <#> <new message/time> | clearall]");
-}).setName("reminders");
+}, "reminders");
