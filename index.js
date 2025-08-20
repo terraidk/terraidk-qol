@@ -12,10 +12,9 @@ import { PREFIX } from "./utils/constants";
 
 function getModuleFolder() {
     // I FUCKING HATE CHATTRIGGERS API WHAT IS THIS SHIT -jesse
-    const modulesDir = "config/ChatTriggers/modules/";
     const File = Java.type("java.io.File");
-    const dir = new File(modulesDir);
-    const folders = dir.listFiles();
+    const modulesDir = new File("config/ChatTriggers/modules/");
+    const folders = modulesDir.listFiles();
     for (let i = 0; i < folders.length; i++) {
         const folder = folders[i];
         if (!FileLib.isDirectory(folder)) {
