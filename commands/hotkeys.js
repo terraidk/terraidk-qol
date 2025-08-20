@@ -23,6 +23,7 @@ const menusKey        = createKeyBind("/menus", 0, "terraidk's QoL");
 const backFunctionKey = createKeyBind("Back to last opened function", 0, "terraidk's QoL");
 const backCommandKey  = createKeyBind("Back to last opened command", 0, "terraidk's QoL");
 const backRegionKey   = createKeyBind("Back to last opened region", 0, "terraidk's QoL");
+const backMenuKey     = createKeyBind("Back to last opened menu", 0, "terraidk's QoL");
 
 // Track previous states for key presses
 let prevStates = {
@@ -34,13 +35,15 @@ let prevStates = {
     menus: false,
     backFunction: false,
     backCommand: false,
-    backRegion: false
+    backRegion: false,
+    backMenu: false
 };
 
 // Track different types separately
 let lastOpenedFunction = null;
 let lastOpenedCommand = null;
 let lastOpenedRegion = null;
+let lastOpenedMenu = null;
 
 // Tick handler for keybinds
 register("tick", () => {
@@ -53,7 +56,8 @@ register("tick", () => {
         menus: menusKey.isPressed(),
         backFunction: backFunctionKey.isPressed(),
         backCommand: backCommandKey.isPressed(),
-        backRegion: backRegionKey.isPressed()
+        backRegion: backRegionKey.isPressed(),
+        backMenu: backMenuKey.isPressed()
     };
 
     if (states.functions && !prevStates.functions) {
@@ -106,6 +110,15 @@ if (states.backRegion && !prevStates.backRegion) {
         ChatLib.chat(PREFIX + `&aReturning to last opened &6Region&a: &b${lastOpenedRegion}`);
     } else {
         ChatLib.chat(PREFIX + "&cNo region has been opened yet!");
+    }
+}
+
+if (states.backMenu && !prevStates.backMenu) {
+    if (lastOpenedMenu) {
+        ChatLib.command(`menu edit ${lastOpenedMenu}`);
+        ChatLib.chat(PREFIX + `&aReturning to last opened &6Menu&a: &b${lastOpenedMenu}`);
+    } else {
+        ChatLib.chat(PREFIX + "&cNo menu has been opened yet!");
     }
 }
 
@@ -186,6 +199,9 @@ register("guiOpened", guiEvent => {
         } else if (title.startsWith("Edit ") && title.endsWith(" Region")) {
             const regionName = title.substring(5, title.length - 7);
             lastOpenedRegion = regionName;
+        } else if (title.startsWith("Edit Menu: ")) {
+            const menuName = title.substring(11); // "Edit Menu: ".length = 11
+            lastOpenedMenu = menuName;
         }
     }, 50); 
 });

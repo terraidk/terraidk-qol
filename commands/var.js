@@ -38,7 +38,7 @@ register("command", (...args) => {
     }
 
     if (!actions.includes(action)) {
-        ChatLib.chat(PREFIX + "&cInvalid action: must be list, inc, dec, set, or unset.");
+        ChatLib.chat(PREFIX + "&cInvalid action: must be list, inc, dec, set or unset.");
         return;
     }
 
