@@ -11,7 +11,7 @@ It adds streamlined menus, shortcuts, and other small improvements to make gamep
 This module **requires ChatTriggers**. If you don’t already have it, download and install it first:  
 [ChatTriggers on Modrinth](https://modrinth.com/mod/chattriggers/version/2.2.0)
 
-Place the `ChatTriggers-x.x.x.jar` into your Minecraft `config/` folder and launch the game once.
+Place the `ChatTriggers-x.x.x.jar` into your Minecraft `mods/` folder and launch the game once.
 
 ### 2. Install terraidk-qol
 1. Download the latest release [here](https://github.com/terraidk/terraidk-qol/releases).  
