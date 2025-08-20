@@ -1,6 +1,8 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import { playFailSound } from "../utils/constants.js";
+
 
 if (typeof Keyboard === "undefined") { var Keyboard = Java.type("org.lwjgl.input.Keyboard"); }
 if (typeof KeyBind === "undefined") { var KeyBind = Java.type("com.chattriggers.ctjs.engine.keybind.KeyBind"); }
@@ -61,26 +63,32 @@ register("tick", () => {
     };
 
     if (states.functions && !prevStates.functions) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.chat(PREFIX + "Opening functions...");
         ChatLib.command("functions");
     }
     if (states.commands && !prevStates.commands) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.chat(PREFIX + "Opening commands...");
         ChatLib.command("commands");
     }
     if (states.regions && !prevStates.regions) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.chat(PREFIX + "Opening regions...");
         ChatLib.command("regions");
     }
     if (states.eventActions && !prevStates.eventActions) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.chat(PREFIX + "Opening event actions...");
         ChatLib.command("eventactions");
     }
     if (states.teams && !prevStates.teams) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.chat(PREFIX + "Opening teams...");
         ChatLib.command("teams");
     }
     if (states.menus && !prevStates.menus) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.chat(PREFIX + "Opening menus...");
         ChatLib.command("menus");
     }
@@ -88,40 +96,47 @@ register("tick", () => {
 
 if (states.backFunction && !prevStates.backFunction) {
     if (lastOpenedFunction) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.command(`function edit ${lastOpenedFunction}`);
         ChatLib.chat(PREFIX + `&aReturning to last opened &6Function&a: &b${lastOpenedFunction}`);
     } else {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cNo function has been opened yet!");
     }
 }
 
 if (states.backCommand && !prevStates.backCommand) {
     if (lastOpenedCommand) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.command(`command actions ${lastOpenedCommand}`);
         ChatLib.chat(PREFIX + `&aReturning to last opened &6Command&a: &b${lastOpenedCommand}`);
     } else {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cNo command has been opened yet!");
     }
 }
 
 if (states.backRegion && !prevStates.backRegion) {
     if (lastOpenedRegion) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.command(`region edit ${lastOpenedRegion}`);
         ChatLib.chat(PREFIX + `&aReturning to last opened &6Region&a: &b${lastOpenedRegion}`);
     } else {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cNo region has been opened yet!");
     }
 }
 
 if (states.backMenu && !prevStates.backMenu) {
     if (lastOpenedMenu) {
+        World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.command(`menu edit ${lastOpenedMenu}`);
         ChatLib.chat(PREFIX + `&aReturning to last opened &6Menu&a: &b${lastOpenedMenu}`);
     } else {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cNo menu has been opened yet!");
     }
 }
-
 
     prevStates = states;
 });

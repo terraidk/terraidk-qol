@@ -1,12 +1,14 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import { playFailSound } from "../utils/constants"
 import config, { registerToggledCommand } from "../utils/command_config.js";
 
 const actions = ["list", "inc", "increment", "dec", "decrement", "set", "unset"];
 
 registerToggledCommand("enableVariables", (...args) => {
-    if (args.length < 2) {
+    if (args.length < 2) {        
+        playFailSound();
         ChatLib.chat(PREFIX + "&cUsage: /var <global|playername> <list|inc|dec|set|unset> <var> [value] &7| &7&oNeed help? -> &b/tqol");
         return;
     }
@@ -39,11 +41,13 @@ registerToggledCommand("enableVariables", (...args) => {
     }
 
     if (!actions.includes(action)) {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cInvalid action: must be list, inc, dec, set or unset.");
         return;
     }
 
     if (!variable && action !== "list") {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cMissing variable name.");
         return;
     }
@@ -57,6 +61,7 @@ registerToggledCommand("enableVariables", (...args) => {
 registerToggledCommand("enableSelfVariables", (...args) => {
     const player = Player.getName();
     if (args.length < 1) {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cUsage: /selfvar <list|inc|dec|set|unset> <var> [value]");
         return;
     }
@@ -73,11 +78,13 @@ registerToggledCommand("enableSelfVariables", (...args) => {
         action = second;
         value = args[2];
     } else {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cInvalid action.");
         return;
     }
 
     if (!variable && action !== "list") {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cMissing variable name.");
         return;
     }

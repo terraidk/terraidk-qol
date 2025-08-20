@@ -1,6 +1,7 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import { playFailSound } from "../utils/constants.js";
 import config, { registerToggledCommand } from "../utils/command_config.js";
 
 const reminderFile = new java.io.File("config/ChatTriggers/modules/terraidk-qol/reminders.json");
@@ -12,6 +13,7 @@ function saveReminders() {
         const json = JSON.stringify(reminders);
         FileLib.write(reminderFile, json);
     } catch (e) {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cFailed to save reminders.");
     }
 }
@@ -123,12 +125,14 @@ registerToggledCommand("enableReminders", (...args) => {
     if (!config.enableReminders) return;
 
     if (!Array.isArray(args) || args.length < 1) {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cUsage: /remind <1h 20m | HH:MM[am/pm]> <message>");
         return;
     }
 
     let parsed = parseTime(args);
     if (!parsed || parsed.ms <= 0) {
+        playFailSound();
         ChatLib.chat(PREFIX + "&cInvalid time format!");
         World.playSound("mob.endermen.portal", 0.5, 0.5);
         return;
@@ -174,6 +178,7 @@ registerToggledCommand("enableReminderList", (...args) => {
         const idx = parseInt(args[1]) - 1;
         if (isNaN(idx) || idx < 0 || idx >= reminders.length) {
             ChatLib.chat(PREFIX + "&cInvalid reminder number.");
+        playFailSound();
             World.playSound("mob.endermen.portal", 0.5, 0.5);
             return;
         }

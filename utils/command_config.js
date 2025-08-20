@@ -186,17 +186,23 @@ class Config {
                 const newState = this.toggle(cmd.key);
                 const status = newState ? "&aEnabled" : "&cDisabled";
                 ChatLib.chat(PREFIX + `${status} &7${cmd.name}`);
+                if (newState) {
+                    World.playSound("random.orb", 1, 1.2); 
+                } else {
+                    World.playSound("random.orb", 1, 0.7);
+                }
                 ChatLib.chat(PREFIX + "&b/ct reload &crequired for changes to take effect!");
-                World.playSound("note.bass", 2, 0.6);
             } else {
+                World.playSound("mob.endermen.portal", 1, 0.5);
                 ChatLib.chat(PREFIX + "&cInvalid command number! Use 1-" + commands.length);
             }
         } else if (args[0] === "reset") {
             this.reset();
             ChatLib.chat(PREFIX + "&aConfig reset to defaults!");
+            World.playSound("note.bass", 2, 0.6); 
             ChatLib.chat(PREFIX + "&b/ct reload &crequired for changes to take effect!");
-            World.playSound("note.bass", 2, 0.6);
         } else {
+            World.playSound("mob.endermen.portal", 1, 0.5);
             ChatLib.chat(PREFIX + "&cUsage: /tqol config [toggle <1-" + commands.length + ">|reset]");
         }
     }

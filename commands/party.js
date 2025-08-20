@@ -1,11 +1,14 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import { playFailSound } from "../utils/constants.js";
+
 import config, { registerToggledCommand } from "../utils/command_config.js";
 
 registerToggledCommand("enablePartyTransfer", (name) => {
     if (!name) {
         ChatLib.chat(PREFIX + "&cYou must specify a player name to transfer the party to! &7| &7&oNeed help? -> &b/tqol help");
+        playFailSound();
         return;
     }
     ChatLib.command(`p transfer ${name}`);

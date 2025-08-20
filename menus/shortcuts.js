@@ -1,6 +1,7 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import { playFailSound } from "../utils/constants";
 
 // Java type imports
 if (typeof Keyboard === "undefined") { var Keyboard = Java.type("org.lwjgl.input.Keyboard"); }
@@ -423,35 +424,42 @@ function showMainMenu() {
         .setColumns(2)
         .addButton("Functions", "Opens the /functions menu", () => {
             ChatLib.command("functions");
+            World.playSound("note.bassattack", 0.7, 2.0);
             ChatLib.chat(PREFIX + "Opening &6Functions&f...");
             gridMenu.close();
         }, 0xFFD32F2F)
         .addButton("Commands", "Opens the /commands menu", () => {
             ChatLib.command("commands");
+            World.playSound("note.bassattack", 0.7, 2.0);
             ChatLib.chat(PREFIX + "Opening &6Commands&f...");
             gridMenu.close();
         }, 0xFFF57F17)
         .addButton("Regions", "Opens the /regions menu", () => {
             ChatLib.command("regions");
+            World.playSound("note.bassattack", 0.7, 2.0);
             ChatLib.chat(PREFIX + "Opening &6Regions&f...");
             gridMenu.close();
         }, 0xFF2E7D32)
         .addButton("Menus", "Opens the /menus menu", () => {
             ChatLib.command("menus");
+            World.playSound("note.bassattack", 0.7, 2.0);
             ChatLib.chat(PREFIX + "Opening &6Menus&f...");
             gridMenu.close();
         }, 0xFF964B00)
         .addButton("Teams", "Opens the /teams menu", () => {
             ChatLib.command("teams");
+            World.playSound("note.bassattack", 0.7, 2.0);
             ChatLib.chat(PREFIX + "Opening &6Teams&f...");
             gridMenu.close();
         }, 0xFF1976D2)
         .addButton("§7Event Actions", "Opens the /eventactions menu", () => {
             ChatLib.command("eventactions");
+            World.playSound("note.bassattack", 0.7, 2.0);
             ChatLib.chat(PREFIX + "Opening &6Event Actions&f...");
             gridMenu.close();
         }, 0xFF424242)
         .addButton("§6Go To Last", "Quick access to your last opened items\nFunctions, Commands, Regions, and Menus", () => {
+            World.playSound("random.click", 0.7, 1.0);
             showGoToLastMenu();
         }, 0xFFFFD700);
 }
@@ -464,40 +472,49 @@ function showGoToLastMenu() {
         .addButton("Last Function", "Go to the last function you worked on\nOpens function edit menu", () => {
             if (lastOpenedFunction) {
                 ChatLib.command(`function edit ${lastOpenedFunction}`);
+                World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "§aReturning to last opened §6Function§a: §b" + lastOpenedFunction);
                 gridMenu.close();
             } else {
+                playFailSound();
                 ChatLib.chat(PREFIX + "§cNo function has been opened yet!");
             }
         }, 0xFFD32F2F)
         .addButton("Last Region", "Go to the last region you worked on\nOpens region edit menu", () => {
             if (lastOpenedRegion) {
                 ChatLib.command(`region edit ${lastOpenedRegion}`);
+                World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "§aReturning to last opened §6Region§a: §b" + lastOpenedRegion);
                 gridMenu.close();
             } else {
+                playFailSound();
                 ChatLib.chat(PREFIX + "§cNo region has been opened yet!");
             }
         }, 0xFF2E7D32)
         .addButton("Last Command", "Go to the last command you worked on\nOpens command actions menu", () => {
             if (lastOpenedCommand) {
                 ChatLib.command(`command actions ${lastOpenedCommand}`);
+                World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "§aReturning to last opened §6Command§a: §b" + lastOpenedCommand);
                 gridMenu.close();
             } else {
+                playFailSound();
                 ChatLib.chat(PREFIX + "§cNo command has been opened yet!");
             }
         }, 0xFFFFA500)
         .addButton("Last Menu", "Go to the last menu you worked on\nOpens menu edit interface", () => {
             if (lastOpenedMenu) {
                 ChatLib.command(`menu edit ${lastOpenedMenu}`);
+                World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "§aReturning to last opened §6Menu§a: §b" + lastOpenedMenu);
                 gridMenu.close();
             } else {
+                playFailSound();
                 ChatLib.chat(PREFIX + "§cNo menu has been opened yet!");
             }
         }, 0xFF9C27B0)
         .addButton("Back to Main Menu", "Go back to the main grid menu\nReturn to previous screen", () => {
+            World.playSound("random.click", 0.7, 1.0);
             showMainMenu();
         }, 0xFF424242);
 }
