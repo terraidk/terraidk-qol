@@ -1,6 +1,7 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from '../utils/constants'
+importPackage(Packages.org.lwjgl.input)
 
 // Java type imports
 if (typeof GuiScreen === 'undefined') {
@@ -26,6 +27,7 @@ class RegionsVisualCache {
     this.scannedPages = new Set() // Track which pages we've scanned
     this.totalPages = 0
     this.currentPage = 1
+    this.filterFocused = false
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -108,6 +110,24 @@ class RegionsVisualCache {
         return this.handleKeyPress(keyCode, char)
       }
     })
+
+    register('step', () => {
+      // Only run if your GUI/menu is open
+      if (!this.isActive) return
+
+      let scroll = Mouse.getDWheel() // +120, -120, or 0
+      if (scroll > 0) {
+        // Scroll up
+        if (this.selectedIndex > 0) {
+          this.selectedIndex--
+        }
+      } else if (scroll < 0) {
+        // Scroll down
+        if (this.selectedIndex < this.filteredRegions.length - 1) {
+          this.selectedIndex++
+        }
+      }
+    }).setFps(60)
   }
 
   clearCache() {
@@ -359,9 +379,9 @@ class RegionsVisualCache {
       Renderer.drawRect(this.colors.filterBorder, panelX + panelWidth - 11, filterY, 1, filterHeight)
 
       // Filter text
-      const filterDisplayText = this.filterText || 'Type /filter <text> to search...'
+      const filterDisplayText = this.filterText || 'Type to search...'
       const filterColor = this.filterText ? '§f' : '§7'
-      Renderer.drawStringWithShadow(filterColor + filterDisplayText, panelX + 15, filterY + 6)
+      Renderer.drawStringWithShadow(filterColor + filterDisplayText + (this.filterFocused ? '|' : ''), panelX + 15, filterY + 6)
 
       if (this.filteredRegions.length !== this.cachedRegions.length) {
         Renderer.drawStringWithShadow(`§e(${this.filteredRegions.length} filtered)`, panelX + panelWidth - 120, filterY + 6)
@@ -490,38 +510,63 @@ class RegionsVisualCache {
     const screenWidth = Renderer.screen.getWidth()
     const panelWidth = 400
     const panelX = screenWidth - panelWidth - 10
+    const panelY = 20
+    const filterBoxY = panelY + 30 // adjust to actual filter Y
+    const filterHeight = 20
 
-    // Check if click is within our panel
-    if (mouseX >= panelX && mouseX <= panelX + panelWidth) {
-      if (this.hoveredIndex >= 0 && this.hoveredIndex < this.filteredRegions.length) {
-        const region = this.filteredRegions[this.hoveredIndex]
-        this.selectedIndex = this.hoveredIndex
-        this.editRegion(region)
-        return true
-      }
+    // Click inside filter box → focus
+    if (mouseX >= panelX + 10 && mouseX <= panelX + panelWidth - 10 && mouseY >= filterBoxY && mouseY <= filterBoxY + filterHeight) {
+      this.filterFocused = true
+      return true
+    } else {
+      this.filterFocused = false
     }
 
+    // Existing region click logic...
+    if (this.hoveredIndex >= 0 && this.hoveredIndex < this.filteredRegions.length) {
+      const region = this.filteredRegions[this.hoveredIndex]
+      this.selectedIndex = this.hoveredIndex
+      this.editRegion(region)
+      return true
+    }
     return false
   }
 
   handleKeyPress(keyCode, char) {
+    if (this.filterFocused) {
+      if (keyCode === 14) {
+        // Backspace
+        this.filterText = this.filterText.slice(0, -1)
+        this.updateFilteredRegions()
+        return true
+      } else if (keyCode === 28) {
+        // Enter → unfocus
+        this.filterFocused = false
+        return true
+      } else if (char && char.length > 0 && char.match(/[\w\s]/)) {
+        this.filterText += char
+        this.updateFilteredRegions()
+        return true
+      }
+    }
+
+    // Existing ESC/arrow/enter navigation logic
     if (keyCode === 1) {
       // ESC
       this.hideOverlay()
       return true
     } else if (keyCode === 200) {
-      // Up arrow
+      // Up
       this.navigateUp()
       return true
     } else if (keyCode === 208) {
-      // Down arrow
+      // Down
       this.navigateDown()
       return true
     } else if (keyCode === 28) {
-      // Enter
+      // Enter on region
       if (this.selectedIndex >= 0 && this.selectedIndex < this.filteredRegions.length) {
-        const region = this.filteredRegions[this.selectedIndex]
-        this.editRegion(region)
+        this.editRegion(this.filteredRegions[this.selectedIndex])
         return true
       }
     }
