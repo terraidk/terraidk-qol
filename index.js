@@ -7,6 +7,7 @@ import "./commands/help";
 import "./commands/hotkeys";
 import "./commands/crud";
 import "./menus/shortcuts";
+import "./menus/regions";
 
 import { PREFIX } from "./utils/constants";
 
