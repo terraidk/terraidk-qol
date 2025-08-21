@@ -80,7 +80,10 @@ function checkForUpdate() {
               .setClick('open_url', 'https://github.com/terraidk/terraidk-qol/releases/latest')
               .setHover(
                 'show_text',
-                '&aClick to download the latest version\n&7Current: &c' + LOCAL_VERSION + '\n&7Latest: &a' + latestVersion
+                '&aClick to download the latest version\n&7Current: &c' +
+                  LOCAL_VERSION +
+                  '\n&7Latest: &a' +
+                  latestVersion
               )
           )
         )
