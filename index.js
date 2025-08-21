@@ -14,30 +14,29 @@ import { PREFIX } from './utils/constants'
 const File = Java.type('java.io.File')
 
 function getModuleFolder() {
-  // I FUCKING HATE CHATTRIGGERS API WHAT IS THIS SHIT -jesse
-  const modulesDir = new File('config/ChatTriggers/modules/')
-  const folders = modulesDir.listFiles()
+  const modulesDir = new File("config/ChatTriggers/modules/");
+  const folders = modulesDir.listFiles();
   for (let i = 0; i < folders.length; i++) {
-    const folder = folders[i]
+    const folder = folders[i];
     if (!FileLib.isDirectory(folder)) {
-      continue
+      continue;
     }
-    const file = `${folder}/metadata.json`
+    const file = `${folder}/metadata.json`;
     if (!FileLib.exists(file)) {
-      continue
+      continue;
     }
-    let metadata
+    let metadata;
     try {
-      metadata = JSON.parse(FileLib.read(file))
+      metadata = JSON.parse(FileLib.read(file));
     } catch (e) {
-      continue
+      continue;
     }
     if (metadata.name !== "terraidk's QoL") {
-      continue
+      continue;
     }
-    return folder
+    return folder;
   }
-  return null
+  return null;
 }
 
 let LOCAL_VERSION = 'unknown'

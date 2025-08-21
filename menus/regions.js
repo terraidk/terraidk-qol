@@ -9,6 +9,94 @@ if (typeof GuiScreen === "undefined") {
 if (typeof Player === "undefined") {
   var Player = Java.type("com.chattriggers.ctjs.minecraft.wrappers.Player");
 }
+if (typeof GuiTextField === "undefined") {
+  var GuiTextField = Java.type("net.minecraft.client.gui.GuiTextField");
+}
+
+// Input wrapper class using reflection
+class Input {
+  constructor(x, y, width, height) {
+    const GuiTextField = Java.type("net.minecraft.client.gui.GuiTextField");
+    this.mcObject = new GuiTextField(
+      0,
+      Client.getMinecraft().field_71466_p,
+      x,
+      y,
+      width,
+      height
+    );
+
+    this.getX = () => {
+      return this.mcObject.field_146209_f;
+    };
+    this.getY = () => {
+      return this.mcObject.field_146210_g;
+    };
+    this.getWidth = () => {
+      return this.mcObject.field_146218_h;
+    };
+    this.getHeight = () => {
+      return this.mcObject.field_146219_i;
+    };
+    this.setX = (x) => {
+      this.mcObject.field_146209_f = x;
+    };
+    this.setY = (y) => {
+      this.mcObject.field_146210_g = y;
+    };
+    this.setWidth = (width) => {
+      this.mcObject.field_146218_h = width;
+    };
+    this.setHeight = (height) => {
+      this.mcObject.field_146219_i = height;
+    };
+
+    this.setEnabled = (enabled) => {
+      const isEnabledField =
+        this.mcObject.class.getDeclaredField("field_146226_p");
+      isEnabledField.setAccessible(true);
+      isEnabledField.set(this.mcObject, enabled);
+    };
+
+    this.setText = (text) => {
+      const textField = this.mcObject.class.getDeclaredField("field_146216_j");
+      textField.setAccessible(true);
+      textField.set(this.mcObject, text);
+    };
+
+    this.getText = () => {
+      const textField = this.mcObject.class.getDeclaredField("field_146216_j");
+      textField.setAccessible(true);
+      return textField.get(this.mcObject);
+    };
+
+    this.setIsFocused = (isFocused) => {
+      const isFocusedField =
+        this.mcObject.class.getDeclaredField("field_146213_o");
+      isFocusedField.setAccessible(true);
+      isFocusedField.set(this.mcObject, isFocused);
+    };
+
+    this.isFocused = () => {
+      const isFocusedField =
+        this.mcObject.class.getDeclaredField("field_146213_o");
+      isFocusedField.setAccessible(true);
+      return isFocusedField.get(this.mcObject);
+    };
+
+    this.render = () => {
+      this.mcObject.func_146194_f();
+    };
+
+    this.mouseClicked = (mouseX, mouseY, button) => {
+      this.mcObject.func_146192_a(mouseX, mouseY, button);
+    };
+
+    this.keyTyped = (char, keyCode) => {
+      this.mcObject.func_146201_a(char, keyCode);
+    };
+  }
+}
 
 class RegionsVisualCache {
   constructor() {
@@ -25,7 +113,13 @@ class RegionsVisualCache {
     this.scannedPages = new Set();
     this.totalPages = 0;
     this.currentPage = 1;
-    this.filterFocused = false;
+    this.scrollbarDragging = false;
+    this.scrollbarDragStartY = 0;
+    this.scrollbarDragStartOffset = 0;
+
+    // Minecraft input field
+    this.filterTextField = null;
+    this.initializeTextField = true;
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -35,11 +129,28 @@ class RegionsVisualCache {
       itemSelected: 0xff4caf50,
       filterBg: 0xff1a1a1a,
       filterBorder: 0xff666666,
-      scrollbar: 0xff555555,
-      scrollbarThumb: 0xff888888,
+      scrollbar: 0xff444444,
+      scrollbarThumb: 0xff777777,
+      scrollbarThumbHover: 0xff999999,
     };
 
     this.registerEvents();
+  }
+
+  createTextField(x, y, width, height) {
+    try {
+      const textField = new Input(x, y, width, height);
+      textField.setEnabled(true);
+      textField.setIsFocused(false);
+      textField.setText("");
+
+      return textField;
+    } catch (error) {
+      ChatLib.chat(
+        PREFIX + `§c[ERROR] Failed to create text field: ${error.message}`
+      );
+      return null;
+    }
   }
 
   registerEvents() {
@@ -63,7 +174,7 @@ class RegionsVisualCache {
       for (let i = 1; i <= 3; i++) {
         setTimeout(() => {
           this.checkForRegionsGUI(i);
-        }, 50);
+        }, 50 * i);
       }
     });
 
@@ -93,6 +204,14 @@ class RegionsVisualCache {
       }
     });
 
+    // Handle mouse release
+    register("guiMouseRelease", (mouseX, mouseY, button) => {
+      if (this.isActive && this.scrollbarDragging && button === 0) {
+        this.scrollbarDragging = false;
+        return true;
+      }
+    });
+
     // Handle key presses
     register("guiKey", (char, keyCode) => {
       if (this.isActive) {
@@ -100,22 +219,81 @@ class RegionsVisualCache {
       }
     });
 
+    // Custom scroll handling using step
     register("step", () => {
       if (!this.isActive) return;
 
+      // Get mouse wheel input
       let scroll = Mouse.getDWheel();
-      if (scroll > 0) {
-        // Scroll up
-        if (this.selectedIndex > 0) {
-          this.selectedIndex--;
-        }
-      } else if (scroll < 0) {
-        // Scroll down
-        if (this.selectedIndex < this.filteredRegions.length - 1) {
-          this.selectedIndex++;
-        }
+      if (scroll !== 0) {
+        this.handleMouseScroll(scroll > 0 ? -1 : 1);
       }
     }).setFps(60);
+  }
+
+  handleMouseScroll(direction) {
+    const availableHeight = this.getListAvailableHeight();
+    const itemHeight = 23;
+    const maxVisibleItems = Math.floor(availableHeight / itemHeight);
+    const maxScroll = Math.max(
+      0,
+      this.filteredRegions.length - maxVisibleItems
+    );
+
+    // Scroll by 1 item at a time
+    this.scrollOffset += direction * 1;
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
+  }
+
+  getListAvailableHeight() {
+    const screenHeight = Renderer.screen.getHeight();
+    const panelHeight = this.calculatePanelDimensions().height;
+    return panelHeight - 90; // Account for title, filter, and instructions
+  }
+
+  // Calculate panel dimensions to avoid GUI overlap
+  calculatePanelDimensions() {
+    const screenWidth = Renderer.screen.getWidth();
+    const screenHeight = Renderer.screen.getHeight();
+
+    // Standard chest GUI dimensions (approximately)
+    const chestGuiWidth = 176;
+    const chestGuiHeight = 166;
+    const chestGuiX = (screenWidth - chestGuiWidth) / 2;
+    const chestGuiY = (screenHeight - chestGuiHeight) / 2;
+
+    // Calculate available space on the right side
+    const rightEdgeOfChest = chestGuiX + chestGuiWidth;
+    const availableWidthOnRight = screenWidth - rightEdgeOfChest - 20; // 20px margin
+
+    // Panel dimensions
+    const maxPanelWidth = 400;
+    const minPanelWidth = 300;
+    let panelWidth = Math.min(
+      maxPanelWidth,
+      Math.max(minPanelWidth, availableWidthOnRight)
+    );
+
+    // If there's not enough space on the right, position on the left
+    let panelX;
+    if (availableWidthOnRight < minPanelWidth) {
+      panelWidth = Math.min(maxPanelWidth, chestGuiX - 20); // Use left side
+      panelX = 10;
+    } else {
+      panelX = rightEdgeOfChest + 10;
+    }
+
+    // Height calculations
+    const maxPanelHeight = Math.min(screenHeight - 40, 600);
+    const panelHeight = maxPanelHeight;
+    const panelY = Math.max(10, (screenHeight - panelHeight) / 2);
+
+    return {
+      width: panelWidth,
+      height: panelHeight,
+      x: panelX,
+      y: panelY,
+    };
   }
 
   clearCache() {
@@ -131,38 +309,29 @@ class RegionsVisualCache {
     this.scannedPages.clear();
     this.totalPages = 0;
     this.currentPage = 1;
+    this.scrollbarDragging = false;
+    this.filterTextField = null;
+    this.initializeTextField = true;
   }
 
   checkForRegionsGUI(attempt) {
     if (this.isActive || this.isScanning) return;
 
     const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      ChatLib.chat(
-        PREFIX + `§7[DEBUG] No inventory found on attempt ${attempt}`
-      );
-      return;
-    }
+    if (!inventory) return;
 
     const regionsRegex = /^\(\d+\/\d+\) Regions$|^Regions$/;
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
-    ChatLib.chat(
-      PREFIX + `§7[DEBUG] Attempt ${attempt}: Title = "${cleanTitle}"`
-    );
 
     if (regionsRegex.test(cleanTitle)) {
-      ChatLib.chat(PREFIX + "§a[DEBUG] Regions GUI detected! Starting scan...");
+      ChatLib.chat(PREFIX + "§aRegions GUI detected! Starting scan...");
 
       // Parse page info from title
       const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
       if (pageMatch) {
         this.currentPage = parseInt(pageMatch[1]);
         this.totalPages = parseInt(pageMatch[2]);
-        ChatLib.chat(
-          PREFIX +
-            `§7[DEBUG] Detected page ${this.currentPage}/${this.totalPages}`
-        );
       }
 
       this.isScanning = true;
@@ -190,7 +359,7 @@ class RegionsVisualCache {
         if (!this.scannedPages.has(newPage)) {
           ChatLib.chat(
             PREFIX +
-              `§e[DEBUG] New page detected: ${newPage}/${newTotalPages}, scanning...`
+              `§eNew page detected: ${newPage}/${newTotalPages}, scanning...`
           );
           this.scanCurrentPage();
         }
@@ -201,7 +370,6 @@ class RegionsVisualCache {
   scanCurrentPage() {
     const inventory = Player.getOpenedInventory();
     if (!inventory) {
-      ChatLib.chat(PREFIX + "§c[DEBUG] No inventory found for scanning");
       this.isScanning = false;
       return;
     }
@@ -217,23 +385,12 @@ class RegionsVisualCache {
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
-    ChatLib.chat(
-      PREFIX +
-        `§7[DEBUG] Scanning page ${this.currentPage}, slots: ${regionSlots.join(
-          ", "
-        )}`
-    );
-
     let newRegionsFound = 0;
 
     // Scan the specific region slots
     regionSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
-        const itemName = item.getName();
-        const itemId = item.getID();
-        const lore = item.getLore();
-
         const regionData = this.parseRegionItem(item, slotIndex);
         if (regionData) {
           const existingRegion = this.cachedRegions.find(
@@ -242,9 +399,6 @@ class RegionsVisualCache {
           if (!existingRegion) {
             this.cachedRegions.push(regionData);
             newRegionsFound++;
-            ChatLib.chat(
-              PREFIX + `§a[DEBUG] Found new region: ${regionData.name}`
-            );
           }
         }
       }
@@ -252,16 +406,14 @@ class RegionsVisualCache {
 
     ChatLib.chat(
       PREFIX +
-        `§a[DEBUG] Page ${this.currentPage} scan complete. Found ${newRegionsFound} new regions. Total: ${this.cachedRegions.length}`
+        `§aPage ${this.currentPage} scan complete. Found ${newRegionsFound} new regions. Total: ${this.cachedRegions.length}`
     );
 
     this.updateFilteredRegions();
 
     if (!this.isActive) {
       this.isActive = true;
-      ChatLib.chat(
-        PREFIX + `§aRegions cache is now active! Use /filter to search regions.`
-      );
+      this.initializeTextField = true;
     }
 
     this.isScanning = false;
@@ -273,16 +425,6 @@ class RegionsVisualCache {
           unscannedPages.push(i);
         }
       }
-      ChatLib.chat(
-        PREFIX +
-          `§e[INFO] ${
-            unscannedPages.length
-          } pages remaining to scan: ${unscannedPages.join(", ")}`
-      );
-      ChatLib.chat(
-        PREFIX +
-          "§e[INFO] Navigate to other pages to scan all regions automatically!"
-      );
     }
   }
 
@@ -307,7 +449,7 @@ class RegionsVisualCache {
       }
     });
 
-    const regionData = {
+    return {
       name: cleanName,
       displayName: itemName,
       from: fromCoords || "Unknown",
@@ -317,15 +459,17 @@ class RegionsVisualCache {
       hasCoords: hasRegionData,
       page: this.currentPage,
     };
-
-    return regionData;
   }
 
   updateFilteredRegions() {
-    if (!this.filterText) {
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText()
+      : "";
+
+    if (!filterText) {
       this.filteredRegions = [...this.cachedRegions];
     } else {
-      const filter = this.filterText.toLowerCase();
+      const filter = filterText.toLowerCase();
       this.filteredRegions = this.cachedRegions.filter(
         (region) =>
           region.name.toLowerCase().includes(filter) ||
@@ -337,23 +481,53 @@ class RegionsVisualCache {
     if (this.selectedIndex >= this.filteredRegions.length) {
       this.selectedIndex = -1;
     }
+
+    // Ensure scroll offset is still valid
+    const availableHeight = this.getListAvailableHeight();
+    const itemHeight = 23;
+    const maxVisibleItems = Math.floor(availableHeight / itemHeight);
+    const maxScroll = Math.max(
+      0,
+      this.filteredRegions.length - maxVisibleItems
+    );
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
   renderOverlay() {
     try {
-      const screenWidth = Renderer.screen.getWidth();
-      const screenHeight = Renderer.screen.getHeight();
+      const panelDims = this.calculatePanelDimensions();
+      const {
+        width: panelWidth,
+        height: panelHeight,
+        x: panelX,
+        y: panelY,
+      } = panelDims;
 
-      const panelWidth = 400;
-      const panelHeight = Math.min(screenHeight - 40, 650);
-      const panelX = screenWidth - panelWidth - 10;
-      const panelY = 20;
+      // Initialize text field if needed
+      if (this.initializeTextField || !this.filterTextField) {
+        const filterY = panelY + 30;
+        const filterHeight = 20;
+        this.filterTextField = this.createTextField(
+          panelX + 10,
+          filterY,
+          panelWidth - 20,
+          filterHeight
+        );
+        this.initializeTextField = false;
 
-      // Draw panel
+        // Ensure it starts with empty text
+        if (this.filterTextField) {
+          this.filterTextField.setText(""); // Use wrapper method
+          this.filterText = "";
+          this.updateFilteredRegions();
+        }
+      }
+
+      // Draw panel with border
       Renderer.drawRect(
         0xdd000000,
-        panelX - 2,
-        panelY - 2,
+        panelX - 1,
+        panelY - 1,
         panelWidth + 4,
         panelHeight + 4
       );
@@ -368,12 +542,12 @@ class RegionsVisualCache {
 
       let currentY = panelY + 10;
 
-      // Draw title
+      // Draw title with PREFIX
       const scannedInfo =
         this.totalPages > 0
           ? `(${this.scannedPages.size}/${this.totalPages} pages)`
           : "";
-      const title = `§6Regions (${this.cachedRegions.length}) ${scannedInfo}`;
+      const title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -382,65 +556,19 @@ class RegionsVisualCache {
       );
       currentY += 20;
 
-      // Draw filter box
-      const filterHeight = 20;
-      const filterY = currentY;
+      // Draw and update text field
+      if (this.filterTextField) {
+        this.filterTextField.render(); // Use wrapper method
 
-      // Filter background
-      Renderer.drawRect(
-        this.colors.filterBg,
-        panelX + 10,
-        filterY,
-        panelWidth - 20,
-        filterHeight
-      );
-      Renderer.drawRect(
-        this.colors.filterBorder,
-        panelX + 10,
-        filterY,
-        panelWidth - 20,
-        1
-      );
-      Renderer.drawRect(
-        this.colors.filterBorder,
-        panelX + 10,
-        filterY + filterHeight - 1,
-        panelWidth - 20,
-        1
-      );
-      Renderer.drawRect(
-        this.colors.filterBorder,
-        panelX + 10,
-        filterY,
-        1,
-        filterHeight
-      );
-      Renderer.drawRect(
-        this.colors.filterBorder,
-        panelX + panelWidth - 11,
-        filterY,
-        1,
-        filterHeight
-      );
-
-      // Filter text
-      const filterDisplayText = this.filterText || "Type to search...";
-      const filterColor = this.filterText ? "§f" : "§7";
-      Renderer.drawStringWithShadow(
-        filterColor + filterDisplayText + (this.filterFocused ? "|" : ""),
-        panelX + 15,
-        filterY + 6
-      );
-
-      if (this.filteredRegions.length !== this.cachedRegions.length) {
-        Renderer.drawStringWithShadow(
-          `§e(${this.filteredRegions.length} filtered)`,
-          panelX + panelWidth - 120,
-          filterY + 6
-        );
+        // Check if text changed and update filter
+        const currentText = this.filterTextField.getText(); // Use wrapper method
+        if (currentText !== this.filterText) {
+          this.filterText = currentText;
+          this.updateFilteredRegions();
+        }
       }
 
-      currentY += filterHeight + 10;
+      currentY += 30; // Account for text field height + spacing
 
       // Draw regions list with scrollbar
       this.drawRegionsList(
@@ -452,7 +580,7 @@ class RegionsVisualCache {
 
       // Draw instructions at bottom
       const instructions = [
-        "§eCAUTION: Region names that are too long will not save to Last Region!",
+        "§eCAUTION: Regions with long names might not save to Last Region!",
       ];
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
@@ -471,8 +599,8 @@ class RegionsVisualCache {
     const maxVisibleItems = Math.floor(
       availableHeight / (itemHeight + itemSpacing)
     );
-    const scrollbarWidth = 8;
-    const listWidth = panelWidth - scrollbarWidth - 20;
+    const scrollbarWidth = 4; // Much smaller scrollbar
+    const listWidth = panelWidth - scrollbarWidth - 25;
 
     let mouseX, mouseY;
     try {
@@ -492,26 +620,35 @@ class RegionsVisualCache {
       this.filteredRegions.length
     );
 
-    // Draw scrollbar background
-    const scrollbarX = panelX + panelWidth - scrollbarWidth - 5;
-    Renderer.drawRect(
-      0xff333333,
-      scrollbarX,
-      listStartY,
-      scrollbarWidth,
-      availableHeight
-    );
-
-    // Draw scrollbar thumb
+    // Draw scrollbar if needed (visual only)
     if (this.filteredRegions.length > maxVisibleItems) {
+      const scrollbarX = panelX + panelWidth - scrollbarWidth - 8;
+      const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
+
+      // Draw scrollbar track
+      Renderer.drawRect(
+        this.colors.scrollbar,
+        scrollbarX,
+        listStartY,
+        scrollbarWidth,
+        availableHeight
+      );
+
+      // Calculate thumb properties
       const thumbHeight = Math.max(
-        20,
+        10,
         (maxVisibleItems / this.filteredRegions.length) * availableHeight
       );
+
+      // Fix thumb position calculation
       const thumbY =
-        listStartY +
-        (this.scrollOffset / (this.filteredRegions.length - maxVisibleItems)) *
-          (availableHeight - thumbHeight);
+        maxScrollRange > 0
+          ? listStartY +
+            (this.scrollOffset / maxScrollRange) *
+              (availableHeight - thumbHeight)
+          : listStartY;
+
+      // Draw scrollbar thumb (no hover effects)
       Renderer.drawRect(
         this.colors.scrollbarThumb,
         scrollbarX,
@@ -530,7 +667,7 @@ class RegionsVisualCache {
       const itemX = panelX + 5;
       const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
 
-      // Check if mouse is hovering
+      // Check if mouse is hovering over list item (not scrollbar area)
       const isHovered =
         mouseX >= itemX &&
         mouseX <= itemX + listWidth &&
@@ -552,13 +689,16 @@ class RegionsVisualCache {
       // Draw item background
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
-      // Draw region name
+      // Draw region name - adjust text length based on panel width
       const nameColor =
         i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
       const regionName = region.name || "Unknown Region";
+
+      // Calculate max characters based on panel width
+      const maxChars = Math.floor(panelWidth / 8) - 8; // Rough character width estimation
       const displayName =
-        regionName.length > 35
-          ? regionName.substring(0, 32) + "..."
+        regionName.length > maxChars
+          ? regionName.substring(0, maxChars - 3) + "..."
           : regionName;
 
       Renderer.drawStringWithShadow(
@@ -567,8 +707,8 @@ class RegionsVisualCache {
         itemY + 2
       );
 
-      // Draw page info
-      if (this.totalPages > 1) {
+      // Draw page info if panel is wide enough
+      if (this.totalPages > 1 && panelWidth > 250) {
         Renderer.drawStringWithShadow(
           `§8[P${region.page}]`,
           itemX + listWidth - 35,
@@ -576,12 +716,20 @@ class RegionsVisualCache {
         );
       }
 
-      // Format coordinates
+      // Format coordinates - adjust based on available width
       if (region.hasCoords && region.from && region.to) {
         const formattedFrom = this.formatCoordinates(region.from);
         const formattedTo = this.formatCoordinates(region.to);
         const coordText = `§7${formattedFrom} → ${formattedTo}`;
-        Renderer.drawStringWithShadow(coordText, itemX + 5, itemY + 12);
+
+        // Truncate coordinates if panel is too narrow
+        const maxCoordLength = Math.floor(panelWidth / 6);
+        const finalCoordText =
+          coordText.length > maxCoordLength
+            ? coordText.substring(0, maxCoordLength - 3) + "..."
+            : coordText;
+
+        Renderer.drawStringWithShadow(finalCoordText, itemX + 5, itemY + 12);
       } else {
         Renderer.drawStringWithShadow(
           "§8No coordinates",
@@ -605,36 +753,34 @@ class RegionsVisualCache {
   }
 
   handleMouseClick(mouseX, mouseY, button) {
-    if (!this.isActive) return false;
+    if (!this.isActive || button !== 0) return false; // Only handle left clicks
 
-    const screenWidth = Renderer.screen.getWidth();
-    const panelWidth = 400;
-    const panelX = screenWidth - panelWidth - 10;
-    const panelY = 20;
-    const filterBoxY = panelY + 30;
-    const filterHeight = 20;
+    const panelDims = this.calculatePanelDimensions();
+    const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
-    if (
-      mouseX >= panelX + 10 &&
-      mouseX <= panelX + panelWidth - 10 &&
-      mouseY >= filterBoxY &&
-      mouseY <= filterBoxY + filterHeight
-    ) {
-      this.filterFocused = true;
-      return true;
-    } else {
-      this.filterFocused = false;
+    // Let the text field handle its own clicks
+    if (this.filterTextField) {
+      this.filterTextField.mouseClicked(mouseX, mouseY, button); // Use wrapper method
     }
 
+    // Check for region click
     if (
       this.hoveredIndex >= 0 &&
       this.hoveredIndex < this.filteredRegions.length
     ) {
       const region = this.filteredRegions[this.hoveredIndex];
       this.selectedIndex = this.hoveredIndex;
+      this.editRegion(region);
+      return true;
+    }
 
-      ChatLib.command(`region edit ${region.name}`);
-
+    // If clicking anywhere on our panel, consume the click
+    if (
+      mouseX >= panelX &&
+      mouseX <= panelX + panelWidth &&
+      mouseY >= panelY &&
+      mouseY <= panelY + panelDims.height
+    ) {
       return true;
     }
 
@@ -642,36 +788,39 @@ class RegionsVisualCache {
   }
 
   handleKeyPress(keyCode, char) {
-    if (this.filterFocused) {
-      if (keyCode === 14) {
-        // Backspace
-        this.filterText = this.filterText.slice(0, -1);
-        this.updateFilteredRegions();
-      } else if (keyCode === 28) {
-        // Enter
-        this.filterFocused = false;
-      } else if (char) {
-        char = String(char);
-        if (char.length > 0 && char.match(/[\w\s]/)) {
-          this.filterText += char;
-          this.updateFilteredRegions();
-        }
-      }
-
-      return true;
+    // Let the text field handle key input first
+    if (this.filterTextField && this.filterTextField.isFocused()) {
+      // Use wrapper method
+      this.filterTextField.keyTyped(char, keyCode); // Use wrapper method
+      return true; // Block all keys when text field is focused
     }
 
-    if (keyCode === 1) this.hideOverlay();
-    else if (keyCode === 200) this.navigateUp();
-    else if (keyCode === 208) this.navigateDown();
-    else if (
-      keyCode === 28 &&
-      this.selectedIndex >= 0 &&
-      this.selectedIndex < this.filteredRegions.length
-    )
-      this.editRegion(this.filteredRegions[this.selectedIndex]);
+    // Regular navigation
+    if (keyCode === 1) {
+      // ESC
+      this.hideOverlay();
+      return true;
+    } else if (keyCode === 200) {
+      // Up arrow
+      this.navigateUp();
+      return true;
+    } else if (keyCode === 208) {
+      // Down arrow
+      this.navigateDown();
+      return true;
+    } else if (keyCode === 28) {
+      // Enter
+      if (
+        this.selectedIndex >= 0 &&
+        this.selectedIndex < this.filteredRegions.length
+      ) {
+        this.editRegion(this.filteredRegions[this.selectedIndex]);
+        return true;
+      }
+    }
 
-    return false;
+    // Block inventory keybinds when overlay is active
+    return true; // This blocks all other keys from reaching the game
   }
 
   navigateUp() {
@@ -693,7 +842,7 @@ class RegionsVisualCache {
   }
 
   ensureVisible() {
-    const availableHeight = 520;
+    const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
 
@@ -711,38 +860,9 @@ class RegionsVisualCache {
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
-  setFilter(filterText) {
-    this.filterText = filterText;
-    this.scrollOffset = 0;
-    this.selectedIndex = -1;
-    this.updateFilteredRegions();
-    ChatLib.chat(
-      PREFIX +
-        `§aFilter set to: "${filterText}" (${this.filteredRegions.length} results)`
-    );
-  }
-
-  clearFilter() {
-    this.filterText = "";
-    this.scrollOffset = 0;
-    this.selectedIndex = -1;
-    this.updateFilteredRegions();
-    ChatLib.chat(
-      PREFIX + `§aFilter cleared (${this.filteredRegions.length} regions)`
-    );
-  }
-
   editRegion(region) {
-    ChatLib.chat(
-      PREFIX + `§aOpening region: §b${region.name} §7(from page ${region.page})`
-    );
-    World.playSound("note.bassattack", 0.7, 2.0);
-
-    Player.getPlayer().closeScreen();
-
-    setTimeout(() => {
-      ChatLib.command(`region edit ${region.name}`);
-    }, 100);
+    // Just run the region edit command instantly
+    ChatLib.command(`region edit ${region.name}`);
   }
 
   hideOverlay() {
@@ -751,10 +871,9 @@ class RegionsVisualCache {
     this.selectedIndex = -1;
     this.scrollOffset = 0;
     this.isScanning = false;
-    ChatLib.chat(
-      PREFIX +
-        `§e[DEBUG] Overlay hidden, keeping ${this.cachedRegions.length} regions cached`
-    );
+    this.scrollbarDragging = false;
+    this.filterTextField = null;
+    this.initializeTextField = true;
   }
 }
 
