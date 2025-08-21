@@ -1,62 +1,63 @@
 /// <reference types="./CTAutocomplete" />
 
-import "./commands/reminder";
-import "./commands/party";
-import "./commands/var";
-import "./commands/help";
-import "./commands/hotkeys";
-import "./commands/crud";
-import "./menus/shortcuts";
-import "./menus/regions";
+import './commands/reminder'
+import './commands/party'
+import './commands/var'
+import './commands/help'
+import './commands/hotkeys'
+import './commands/crud'
+import './menus/shortcuts'
+import './menus/regions'
 
-import { PREFIX } from "./utils/constants";
+import { PREFIX } from './utils/constants'
+
+const File = Java.type('java.io.File')
 
 function getModuleFolder() {
-    // I FUCKING HATE CHATTRIGGERS API WHAT IS THIS SHIT -jesse
-    const File = Java.type("java.io.File");
-    const modulesDir = new File("config/ChatTriggers/modules/");
-    const folders = modulesDir.listFiles();
-    for (let i = 0; i < folders.length; i++) {
-        const folder = folders[i];
-        if (!FileLib.isDirectory(folder)) {
-            continue;
-        }
-        const file = `${folder}/metadata.json`;
-        if (!FileLib.exists(file)) {
-            continue;
-        }
-        let metadata;
-        try {
-            metadata = JSON.parse(FileLib.read(file));
-        } catch (e) {
-            continue;
-        }
-        if (metadata.name !== "terraidk's QoL") {
-            continue;
-        }
-        return folder;
+  // I FUCKING HATE CHATTRIGGERS API WHAT IS THIS SHIT -jesse
+  const modulesDir = new File('config/ChatTriggers/modules/')
+  const folders = modulesDir.listFiles()
+  for (let i = 0; i < folders.length; i++) {
+    const folder = folders[i]
+    if (!FileLib.isDirectory(folder)) {
+      continue
     }
-    return null;
+    const file = `${folder}/metadata.json`
+    if (!FileLib.exists(file)) {
+      continue
+    }
+    let metadata
+    try {
+      metadata = JSON.parse(FileLib.read(file))
+    } catch (e) {
+      continue
+    }
+    if (metadata.name !== "terraidk's QoL") {
+      continue
+    }
+    return folder
+  }
+  return null
 }
 
-let LOCAL_VERSION = "unknown";
+let LOCAL_VERSION = 'unknown'
 try {
-    const moduleFolder = getModuleFolder();
-    if (!moduleFolder) {
-        throw new Error("This should not happen");
-    }
-    const localMeta = FileLib.read(`${moduleFolder}/metadata.json`);
-    if (localMeta) {
-        LOCAL_VERSION = JSON.parse(localMeta).version || "unknown";
-    }
+  const moduleFolder = getModuleFolder()
+  if (!moduleFolder) {
+    throw new Error('This should not happen')
+  }
+  const localMeta = FileLib.read(`${moduleFolder}/metadata.json`)
+  if (localMeta) {
+    LOCAL_VERSION = JSON.parse(localMeta).version || 'unknown'
+  }
 } catch (e) {}
 
-const LATEST_VERSION_URL = "https://raw.githubusercontent.com/terraidk/terraidk-qol/main/metadata.json";
+const LATEST_VERSION_URL = 'https://raw.githubusercontent.com/terraidk/terraidk-qol/main/metadata.json'
 
 // Delay load message by 0.5 second (500 milliseconds)
 setTimeout(() => {
   ChatLib.chat(
-    new TextComponent(PREFIX + "&f" + LOCAL_VERSION + " Loaded successfully. | " + "&b&nChangelog")
+    new TextComponent(PREFIX + '&f' + LOCAL_VERSION + ' Loaded successfully. | ' + '&b&nChangelog')
       .setClick('open_url', 'https://github.com/terraidk/terraidk-qol/releases/v' + LOCAL_VERSION)
       .setHover('show_text', '&fClick to view &aTQoL&f on &9&lGitHub')
   )
