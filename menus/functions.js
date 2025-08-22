@@ -97,10 +97,10 @@ class Input {
   }
 }
 
-class RegionsVisualCache {
+class FunctionsVisualCache {
   constructor() {
-    this.cachedRegions = [];
-    this.filteredRegions = [];
+    this.cachedFunctions = [];
+    this.filteredFunctions = [];
     this.isActive = false;
     this.isScanning = false;
     this.hoveredIndex = -1;
@@ -174,7 +174,7 @@ class RegionsVisualCache {
     register("worldLoad", () => {
       const newWorld = World.getWorld();
       if (this.currentWorld && newWorld !== this.currentWorld) {
-        ChatLib.chat(PREFIX + "§eWorld changed - clearing regions cache");
+        ChatLib.chat(PREFIX + "§eWorld changed - clearing functions cache");
         this.clearCache();
       }
       this.currentWorld = newWorld;
@@ -189,7 +189,7 @@ class RegionsVisualCache {
 
       for (let i = 1; i <= 3; i++) {
         setTimeout(() => {
-          this.checkForRegionsGUI(i);
+          this.checkForFunctionsGUI(i);
         }, 50 * i);
       }
     });
@@ -207,7 +207,7 @@ class RegionsVisualCache {
     });
 
     register("guiRender", (mouseX, mouseY) => {
-      if (this.isActive && this.cachedRegions.length > 0) {
+      if (this.isActive && this.cachedFunctions.length > 0) {
         this.renderOverlay();
       }
     });
@@ -247,7 +247,7 @@ class RegionsVisualCache {
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
     const maxScroll = Math.max(
       0,
-      this.filteredRegions.length - maxVisibleItems
+      this.filteredFunctions.length - maxVisibleItems
     );
 
     this.scrollOffset += direction * 1;
@@ -300,8 +300,8 @@ class RegionsVisualCache {
   }
 
   clearCache() {
-    this.cachedRegions = [];
-    this.filteredRegions = [];
+    this.cachedFunctions = [];
+    this.filteredFunctions = [];
     this.isActive = false;
     this.hoveredIndex = -1;
     this.selectedIndex = -1;
@@ -318,21 +318,21 @@ class RegionsVisualCache {
     this.restoreAllKeybinds();
   }
 
-  checkForRegionsGUI(attempt) {
+  checkForFunctionsGUI(attempt) {
     if (this.isActive || this.isScanning) return;
 
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
 
-    const regionsRegex = /^\(\d+\/\d+\) Regions$|^Regions$/;
+    const functionsRegex = /^\(\d+\/\d+\) Functions$|^Functions$/;
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
 
-    if (regionsRegex.test(cleanTitle)) {
-      ChatLib.chat(PREFIX + "§aRegions GUI detected! Starting scan...");
+    if (functionsRegex.test(cleanTitle)) {
+      ChatLib.chat(PREFIX + "§aFunctions GUI detected! Starting scan...");
 
       // Parse page info from title
-      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
+      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Functions$/);
       if (pageMatch) {
         this.currentPage = parseInt(pageMatch[1]);
         this.totalPages = parseInt(pageMatch[2]);
@@ -349,7 +349,7 @@ class RegionsVisualCache {
 
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
-    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Functions$/);
 
     if (pageMatch) {
       const newPage = parseInt(pageMatch[1]);
@@ -379,27 +379,27 @@ class RegionsVisualCache {
 
     this.scannedPages.add(this.currentPage);
 
-    // The regions are in specific slots in the chest GUI
+    // The functions are in specific slots in the chest GUI (same as regions)
     // prettier-ignore
-    const regionSlots = [
+    const functionSlots = [
       10, 11, 12, 13, 14, 15, 16, // Row 1 
       19, 20, 21, 22, 23, 24, 25, // Row 2
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
-    let newRegionsFound = 0;
+    let newFunctionsFound = 0;
 
-    regionSlots.forEach((slotIndex) => {
+    functionSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
-        const regionData = this.parseRegionItem(item, slotIndex);
-        if (regionData) {
-          const existingRegion = this.cachedRegions.find(
-            (r) => r.name === regionData.name
+        const functionData = this.parseFunctionItem(item, slotIndex);
+        if (functionData) {
+          const existingFunction = this.cachedFunctions.find(
+            (f) => f.name === functionData.name
           );
-          if (!existingRegion) {
-            this.cachedRegions.push(regionData);
-            newRegionsFound++;
+          if (!existingFunction) {
+            this.cachedFunctions.push(functionData);
+            newFunctionsFound++;
           }
         }
       }
@@ -407,10 +407,10 @@ class RegionsVisualCache {
 
     ChatLib.chat(
       PREFIX +
-        `§aPage ${this.currentPage} scan complete. Found ${newRegionsFound} new regions. Total: ${this.cachedRegions.length}`
+        `§aPage ${this.currentPage} scan complete. Found ${newFunctionsFound} new functions. Total: ${this.cachedFunctions.length}`
     );
 
-    this.updateFilteredRegions();
+    this.updateFilteredFunctions();
 
     if (!this.isActive) {
       this.isActive = true;
@@ -430,24 +430,30 @@ class RegionsVisualCache {
     }
   }
 
-  parseRegionItem(item, slotIndex) {
+  parseFunctionItem(item, slotIndex) {
     const itemName = item.getName();
     const cleanName = itemName.replace(/§[0-9a-fk-or]/g, "");
     const lore = item.getLore();
 
-    let fromCoords = null;
-    let toCoords = null;
-    let hasRegionData = false;
+    let descriptions = [];
+    let hasFunctionData = false;
 
     lore.forEach((line) => {
       const cleanLine = line.replace(/§[0-9a-fk-or]/g, "");
 
-      if (cleanLine.startsWith("From:")) {
-        fromCoords = cleanLine.substring(5).trim();
-        hasRegionData = true;
-      } else if (cleanLine.startsWith("To:")) {
-        toCoords = cleanLine.substring(3).trim();
-        hasRegionData = true;
+      if (
+        cleanLine.trim() === "" ||
+        cleanLine.includes("Left Click") ||
+        cleanLine.includes("Right Click") ||
+        cleanLine.includes("SHIFT") ||
+        cleanLine.includes("more options")
+      ) {
+        return;
+      }
+
+      if (line.includes("§7")) {
+        descriptions.push(cleanLine.trim());
+        hasFunctionData = true;
       }
     });
 
@@ -473,11 +479,11 @@ class RegionsVisualCache {
     return {
       name: cleanName,
       displayName: itemName,
-      from: fromCoords || "Unknown",
-      to: toCoords || "Unknown",
+      description: descriptions.length > 0 ? descriptions.join(" ") : null,
+      descriptions: descriptions,
       lore: lore,
       slotIndex: slotIndex,
-      hasCoords: hasRegionData,
+      hasDescription: hasFunctionData,
       ctItem: ctItem,
       itemId: itemId,
       itemDamage: itemDamage,
@@ -485,24 +491,28 @@ class RegionsVisualCache {
     };
   }
 
-  updateFilteredRegions() {
+  updateFilteredFunctions() {
     const filterText = this.filterTextField
       ? this.filterTextField.getText()
       : "";
 
     if (!filterText) {
-      this.filteredRegions = [...this.cachedRegions];
+      this.filteredFunctions = [...this.cachedFunctions];
     } else {
       const filter = filterText.toLowerCase();
-      this.filteredRegions = this.cachedRegions.filter(
-        (region) =>
-          region.name.toLowerCase().includes(filter) ||
-          (region.from && region.from.toLowerCase().includes(filter)) ||
-          (region.to && region.to.toLowerCase().includes(filter))
+      this.filteredFunctions = this.cachedFunctions.filter(
+        (func) =>
+          func.name.toLowerCase().includes(filter) ||
+          (func.description &&
+            func.description.toLowerCase().includes(filter)) ||
+          (func.descriptions &&
+            func.descriptions.some((desc) =>
+              desc.toLowerCase().includes(filter)
+            ))
       );
     }
 
-    if (this.selectedIndex >= this.filteredRegions.length) {
+    if (this.selectedIndex >= this.filteredFunctions.length) {
       this.selectedIndex = -1;
     }
 
@@ -511,7 +521,7 @@ class RegionsVisualCache {
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
     const maxScroll = Math.max(
       0,
-      this.filteredRegions.length - maxVisibleItems
+      this.filteredFunctions.length - maxVisibleItems
     );
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
@@ -540,7 +550,7 @@ class RegionsVisualCache {
         if (this.filterTextField) {
           this.filterTextField.setText("");
           this.filterText = "";
-          this.updateFilteredRegions();
+          this.updateFilteredFunctions();
         }
       }
 
@@ -567,7 +577,7 @@ class RegionsVisualCache {
         this.totalPages > 0
           ? `(${this.scannedPages.size}/${this.totalPages} pages)`
           : "";
-      const title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
+      const title = `${PREFIX}Functions (${this.cachedFunctions.length}) ${scannedInfo}`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -576,7 +586,6 @@ class RegionsVisualCache {
       );
       currentY += 20;
 
-      // Draw and update text field
       if (this.filterTextField) {
         this.filterTextField.render();
 
@@ -584,21 +593,22 @@ class RegionsVisualCache {
 
         if (currentText !== this.filterText) {
           this.filterText = currentText;
-          this.updateFilteredRegions();
+          this.updateFilteredFunctions();
         }
       }
 
       currentY += 30;
 
-      this.drawRegionsList(
+      this.drawFunctionsList(
         panelX,
         currentY,
         panelWidth,
         panelHeight - (currentY - panelY) - 30
       );
 
+      // Draw instructions at bottom
       const instructions = [
-        "§eCAUTION: Regions with long names might not save to Last Region!",
+        "§eCAUTION: Functions with long names might not save to Last Function!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
       ];
       instructions.forEach((instruction, index) => {
@@ -612,7 +622,7 @@ class RegionsVisualCache {
     }
   }
 
-  drawRegionsList(panelX, listStartY, panelWidth, availableHeight) {
+  drawFunctionsList(panelX, listStartY, panelWidth, availableHeight) {
     const itemHeight = 22;
     const itemSpacing = 1;
     const maxVisibleItems = Math.floor(
@@ -638,15 +648,15 @@ class RegionsVisualCache {
     const startIndex = this.scrollOffset;
     const endIndex = Math.min(
       startIndex + maxVisibleItems,
-      this.filteredRegions.length
+      this.filteredFunctions.length
     );
 
     const visibleItemCount = endIndex - startIndex;
     const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
 
-    if (this.filteredRegions.length > maxVisibleItems) {
+    if (this.filteredFunctions.length > maxVisibleItems) {
       const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
+      const maxScrollRange = this.filteredFunctions.length - maxVisibleItems;
 
       const scrollbarHeight = actualContentHeight;
 
@@ -660,7 +670,7 @@ class RegionsVisualCache {
 
       const thumbHeight = Math.max(
         10,
-        (maxVisibleItems / this.filteredRegions.length) * scrollbarHeight
+        (maxVisibleItems / this.filteredFunctions.length) * scrollbarHeight
       );
 
       const thumbY =
@@ -680,8 +690,8 @@ class RegionsVisualCache {
     }
 
     for (let i = startIndex; i < endIndex; i++) {
-      const region = this.filteredRegions[i];
-      if (!region) continue;
+      const func = this.filteredFunctions[i];
+      if (!func) continue;
 
       const listIndex = i - startIndex;
       const itemX = panelX + 10;
@@ -707,17 +717,17 @@ class RegionsVisualCache {
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
       try {
-        if (region.ctItem) {
+        if (func.ctItem) {
           const iconX = itemX + iconMargin;
           const iconY = itemY + (itemHeight - iconSize) / 2;
 
-          region.ctItem.draw(iconX, iconY, 1.0);
+          func.ctItem.draw(iconX, iconY, 1.0);
         } else {
           this.drawFallbackIcon(
             itemX + iconMargin,
             itemY + (itemHeight - iconSize) / 2,
             iconSize,
-            region
+            func
           );
         }
       } catch (e) {
@@ -725,35 +735,39 @@ class RegionsVisualCache {
           itemX + iconMargin,
           itemY + (itemHeight - iconSize) / 2,
           iconSize,
-          region
+          func
         );
       }
 
       const textStartX = itemX + iconSize + iconMargin * 2;
       const availableTextWidth = listWidth - iconSize - iconMargin * 3;
 
+      // Draw function name
       const nameColor =
         i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
-      const regionName = region.name || "Unknown Region";
+      const functionName = func.name || "Unknown Function";
 
       const maxChars = Math.floor(availableTextWidth / 6) - 2;
       const displayName =
-        regionName.length > maxChars
-          ? regionName.substring(0, maxChars - 3) + "..."
-          : regionName;
+        functionName.length > maxChars
+          ? functionName.substring(0, maxChars - 3) + "..."
+          : functionName;
 
-      Renderer.drawStringWithShadow(
-        nameColor + displayName,
-        textStartX,
-        itemY + 2
-      );
+      let nameY;
+      if (!func.hasDescription || !func.description) {
+        nameY = itemY + (itemHeight - 8) / 2;
+      } else {
+        nameY = itemY + 2;
+      }
+
+      Renderer.drawStringWithShadow(nameColor + displayName, textStartX, nameY);
 
       if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${region.page}]`;
+        const pageText = `§8[P${func.page}]`;
         const pageWidth = Renderer.getStringWidth(pageText);
         const pageHeight = 8;
 
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+        const pageY = itemY + (itemHeight - pageHeight) / 2;
 
         Renderer.drawStringWithShadow(
           pageText,
@@ -762,36 +776,26 @@ class RegionsVisualCache {
         );
       }
 
-      // Format coordinates
-      if (region.hasCoords && region.from && region.to) {
-        const formattedFrom = this.formatCoordinates(region.from);
-        const formattedTo = this.formatCoordinates(region.to);
-        const coordText = `§7${formattedFrom} → ${formattedTo}`;
+      if (func.hasDescription && func.description) {
+        const descText = `§7${func.description}`;
+        const maxDescLength = Math.floor(availableTextWidth / 6);
+        const finalDescText =
+          descText.length > maxDescLength
+            ? descText.substring(0, maxDescLength - 3) + "..."
+            : descText;
 
-        const maxCoordLength = Math.floor(availableTextWidth / 6);
-        const finalCoordText =
-          coordText.length > maxCoordLength
-            ? coordText.substring(0, maxCoordLength - 3) + "..."
-            : coordText;
-
-        Renderer.drawStringWithShadow(finalCoordText, textStartX, itemY + 12);
-      } else {
-        Renderer.drawStringWithShadow(
-          "§8No coordinates",
-          textStartX,
-          itemY + 12
-        );
+        Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
       }
     }
   }
 
-  drawFallbackIcon(x, y, size, region) {
+  drawFallbackIcon(x, y, size, func) {
     let color = 0xff666666;
 
-    if (region.name) {
+    if (func.name) {
       let hash = 0;
-      for (let i = 0; i < region.name.length; i++) {
-        hash = region.name.charCodeAt(i) + ((hash << 5) - hash);
+      for (let i = 0; i < func.name.length; i++) {
+        hash = func.name.charCodeAt(i) + ((hash << 5) - hash);
       }
 
       // don't make colors too dark
@@ -804,31 +808,18 @@ class RegionsVisualCache {
 
     Renderer.drawRect(color, x, y, size, size);
 
-    // Draw a border
     Renderer.drawRect(0xff000000, x, y, size, 1); // top
     Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
     Renderer.drawRect(0xff000000, x, y, 1, size); // left
     Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
 
-    if (region.name && region.name.length > 0) {
-      const letter = region.name.charAt(0).toUpperCase();
+    if (func.name && func.name.length > 0) {
+      const letter = func.name.charAt(0).toUpperCase();
       const letterWidth = Renderer.getStringWidth(letter);
       const centerX = x + (size - letterWidth) / 2;
       const centerY = y + (size - 8) / 2;
       Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
     }
-  }
-
-  formatCoordinates(coords) {
-    if (!coords || coords === "Unknown") return coords;
-
-    const clean = coords.replace(/\s/g, "").replace(/[()]/g, "");
-    const parts = clean.split(",");
-    if (parts.length === 3) {
-      return `${parts[0]}, ${parts[1]}, ${parts[2]}`;
-    }
-
-    return coords;
   }
 
   handleMouseClick(mouseX, mouseY, button) {
@@ -838,16 +829,16 @@ class RegionsVisualCache {
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
     if (this.filterTextField) {
-      this.filterTextField.mouseClicked(mouseX, mouseY, button); // Use wrapper method
+      this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
     if (
       this.hoveredIndex >= 0 &&
-      this.hoveredIndex < this.filteredRegions.length
+      this.hoveredIndex < this.filteredFunctions.length
     ) {
-      const region = this.filteredRegions[this.hoveredIndex];
+      const func = this.filteredFunctions[this.hoveredIndex];
       this.selectedIndex = this.hoveredIndex;
-      this.editRegion(region);
+      this.editFunction(func);
       return true;
     }
 
@@ -900,9 +891,9 @@ class RegionsVisualCache {
       // Enter
       if (
         this.selectedIndex >= 0 &&
-        this.selectedIndex < this.filteredRegions.length
+        this.selectedIndex < this.filteredFunctions.length
       ) {
-        this.editRegion(this.filteredRegions[this.selectedIndex]);
+        this.editFunction(this.filteredFunctions[this.selectedIndex]);
         return true;
       }
     }
@@ -914,16 +905,16 @@ class RegionsVisualCache {
     if (this.selectedIndex > 0) {
       this.selectedIndex--;
       this.ensureVisible();
-    } else if (this.selectedIndex === -1 && this.filteredRegions.length > 0) {
+    } else if (this.selectedIndex === -1 && this.filteredFunctions.length > 0) {
       this.selectedIndex = 0;
     }
   }
 
   navigateDown() {
-    if (this.selectedIndex < this.filteredRegions.length - 1) {
+    if (this.selectedIndex < this.filteredFunctions.length - 1) {
       this.selectedIndex++;
       this.ensureVisible();
-    } else if (this.selectedIndex === -1 && this.filteredRegions.length > 0) {
+    } else if (this.selectedIndex === -1 && this.filteredFunctions.length > 0) {
       this.selectedIndex = 0;
     }
   }
@@ -941,13 +932,13 @@ class RegionsVisualCache {
 
     const maxScroll = Math.max(
       0,
-      this.filteredRegions.length - maxVisibleItems
+      this.filteredFunctions.length - maxVisibleItems
     );
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
-  editRegion(region) {
-    ChatLib.command(`region edit ${region.name}`);
+  editFunction(func) {
+    ChatLib.command(`function edit ${func.name}`);
   }
 
   hideOverlay() {
@@ -963,5 +954,5 @@ class RegionsVisualCache {
   }
 }
 
-const regionsVisualCache = new RegionsVisualCache();
-export { regionsVisualCache };
+const functionsVisualCache = new FunctionsVisualCache();
+export { functionsVisualCache };
