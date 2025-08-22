@@ -174,7 +174,6 @@ class FunctionsVisualCache {
     register("worldLoad", () => {
       const newWorld = World.getWorld();
       if (this.currentWorld && newWorld !== this.currentWorld) {
-        ChatLib.chat(PREFIX + "§eWorld changed - clearing functions cache");
         this.clearCache();
       }
       this.currentWorld = newWorld;

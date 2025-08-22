@@ -116,6 +116,11 @@ class RegionsVisualCache {
     this.scrollbarDragStartY = 0;
     this.scrollbarDragStartOffset = 0;
 
+    // Auto-scan functionality
+    this.isAutoScanning = false;
+    this.autoScanDelay = 500; // ms between page clicks
+    this.autoScanTimeout = null;
+
     this.filterTextField = null;
     this.initializeTextField = true;
 
@@ -132,6 +137,12 @@ class RegionsVisualCache {
       scrollbar: 0xff444444,
       scrollbarThumb: 0xff777777,
       scrollbarThumbHover: 0xff999999,
+      buttonBg: 0xff4a4a4a,
+      buttonHover: 0xff5a5a5a,
+      buttonText: 0xffffffff,
+      scanButton: 0xff2196f3,
+      scanButtonHover: 0xff1976d2,
+      scanButtonActive: 0xff0d47a1,
     };
 
     this.registerEvents();
@@ -174,7 +185,6 @@ class RegionsVisualCache {
     register("worldLoad", () => {
       const newWorld = World.getWorld();
       if (this.currentWorld && newWorld !== this.currentWorld) {
-        ChatLib.chat(PREFIX + "§eWorld changed - clearing regions cache");
         this.clearCache();
       }
       this.currentWorld = newWorld;
@@ -257,7 +267,7 @@ class RegionsVisualCache {
   getListAvailableHeight() {
     const screenHeight = Renderer.screen.getHeight();
     const panelHeight = this.calculatePanelDimensions().height;
-    return panelHeight - 90;
+    return panelHeight - 130; // Increased to account for scan button
   }
 
   calculatePanelDimensions() {
@@ -315,6 +325,14 @@ class RegionsVisualCache {
     this.scrollbarDragging = false;
     this.filterTextField = null;
     this.initializeTextField = true;
+
+    // Clear auto-scan state
+    this.isAutoScanning = false;
+    if (this.autoScanTimeout) {
+      clearTimeout(this.autoScanTimeout);
+      this.autoScanTimeout = null;
+    }
+
     this.restoreAllKeybinds();
   }
 
@@ -329,17 +347,46 @@ class RegionsVisualCache {
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
 
     if (regionsRegex.test(cleanTitle)) {
-      ChatLib.chat(PREFIX + "§aRegions GUI detected! Starting scan...");
-
-      // Parse page info from title
       const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
       if (pageMatch) {
         this.currentPage = parseInt(pageMatch[1]);
         this.totalPages = parseInt(pageMatch[2]);
+      } else if (cleanTitle === "Regions") {
+        this.currentPage = 1;
+        this.totalPages = this.detectTotalPages(inventory);
       }
 
       this.isScanning = true;
       this.scanCurrentPage();
+    }
+  }
+
+  detectTotalPages(inventory) {
+    const nextPageItem = inventory.getStackInSlot(53);
+
+    if (nextPageItem && nextPageItem.getName() !== "Air") {
+      const lore = nextPageItem.getLore() || [];
+      const itemName = nextPageItem.getName() || "";
+
+      const linesToCheck = [...lore, itemName].filter(
+        (line) => line != null && line !== ""
+      );
+
+      for (const line of linesToCheck) {
+        try {
+          const cleanLine = line.replace(/§[0-9a-fk-or]/g, "");
+          const pagePattern = cleanLine.match(/(\d+)\/(\d+)/);
+          if (pagePattern) {
+            return parseInt(pagePattern[2]);
+          }
+        } catch (error) {
+          continue;
+        }
+      }
+
+      return 999;
+    } else {
+      return 1;
     }
   }
 
@@ -349,6 +396,7 @@ class RegionsVisualCache {
 
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+
     const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
 
     if (pageMatch) {
@@ -357,17 +405,57 @@ class RegionsVisualCache {
 
       if (newPage !== this.currentPage || newTotalPages !== this.totalPages) {
         this.currentPage = newPage;
-        this.totalPages = newTotalPages;
+
+        if (this.totalPages === 999 || newTotalPages !== this.totalPages) {
+          this.totalPages = newTotalPages;
+        }
 
         if (!this.scannedPages.has(newPage)) {
-          ChatLib.chat(
-            PREFIX +
-              `§eNew page detected: ${newPage}/${newTotalPages}, scanning...`
-          );
+          if (this.isAutoScanning) {
+            ChatLib.chat(
+              PREFIX + `§bAuto-scanning page ${newPage}/${this.totalPages}...`
+            );
+          } else {
+            ChatLib.chat(
+              PREFIX +
+                `§eNew page detected: ${newPage}/${this.totalPages}, scanning...`
+            );
+          }
           this.scanCurrentPage();
+        } else if (this.isAutoScanning) {
+          setTimeout(() => {
+            this.continueAutoScan();
+          }, this.autoScanDelay / 2);
+        }
+      }
+    } else if (cleanTitle === "Regions") {
+      if (this.currentPage !== 1) {
+        this.currentPage = 1;
+
+        if (!this.scannedPages.has(1)) {
+          ChatLib.chat(PREFIX + `§eBack to page 1, scanning...`);
+          this.scanCurrentPage();
+        } else if (this.isAutoScanning) {
+          setTimeout(() => {
+            this.continueAutoScan();
+          }, this.autoScanDelay / 2);
         }
       }
     }
+  }
+  stopAutoScan() {
+    if (!this.isAutoScanning) return;
+
+    this.isAutoScanning = false;
+    if (this.autoScanTimeout) {
+      clearTimeout(this.autoScanTimeout);
+      this.autoScanTimeout = null;
+    }
+
+    ChatLib.chat(
+      PREFIX +
+        `§eAuto-scan stopped. Scanned ${this.scannedPages.size}/${this.totalPages} pages.`
+    );
   }
 
   scanCurrentPage() {
@@ -405,10 +493,15 @@ class RegionsVisualCache {
       }
     });
 
-    ChatLib.chat(
-      PREFIX +
-        `§aPage ${this.currentPage} scan complete. Found ${newRegionsFound} new regions. Total: ${this.cachedRegions.length}`
-    );
+    if (this.isAutoScanning) {
+      if (newRegionsFound > 0) {
+        ChatLib.chat(
+          PREFIX +
+            `§bPage ${this.currentPage}: +${newRegionsFound} regions (Total: ${this.cachedRegions.length})`
+        );
+        World.playSound("random.orb", 1, 2);
+      }
+    }
 
     this.updateFilteredRegions();
 
@@ -419,13 +512,120 @@ class RegionsVisualCache {
     }
 
     this.isScanning = false;
+  }
 
-    if (this.scannedPages.size < this.totalPages) {
-      const unscannedPages = [];
-      for (let i = 1; i <= this.totalPages; i++) {
-        if (!this.scannedPages.has(i)) {
-          unscannedPages.push(i);
-        }
+  startAutoScan() {
+    if (this.isAutoScanning || !this.isActive) return;
+
+    this.isAutoScanning = true;
+    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
+
+    setTimeout(() => {
+      this.continueAutoScan();
+    }, 100);
+  }
+
+  goToFirstPage() {
+    if (this.currentPage === 1) {
+      this.continueAutoScan();
+      return;
+    }
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) {
+      this.stopAutoScan();
+      return;
+    }
+
+    const prevPageItem = inventory.getStackInSlot(45);
+    if (prevPageItem && prevPageItem.getName() !== "Air") {
+      inventory.click(45, false, "LEFT");
+
+      this.autoScanTimeout = setTimeout(() => {
+        this.goToFirstPage();
+      }, this.autoScanDelay);
+    } else {
+      this.continueAutoScan();
+    }
+  }
+
+  continueAutoScan() {
+    if (!this.isAutoScanning) return;
+
+    if (this.scannedPages.size >= this.totalPages) {
+      ChatLib.chat(
+        PREFIX +
+          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
+      );
+      World.playSound("random.levelup", 1, 2);
+      this.isAutoScanning = false;
+      return;
+    }
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) {
+      this.stopAutoScan();
+      return;
+    }
+
+    const nextPageItem = inventory.getStackInSlot(53);
+    if (nextPageItem && nextPageItem.getName() !== "Air") {
+      inventory.click(53, false, "LEFT");
+
+      this.autoScanTimeout = setTimeout(() => {
+        this.continueAutoScan();
+      }, this.autoScanDelay);
+    } else {
+      if (!this.scannedPages.has(this.currentPage)) {
+        this.scanCurrentPage();
+
+        setTimeout(() => {
+          if (this.scannedPages.size >= this.totalPages) {
+            ChatLib.chat(
+              PREFIX +
+                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
+            );
+            this.isAutoScanning = false;
+          } else {
+            this.stopAutoScan();
+          }
+        }, 100);
+      } else {
+        ChatLib.chat(
+          PREFIX + `§aTotal regions loaded: ${this.cachedRegions.length}`
+        );
+        this.isAutoScanning = false;
+      }
+    }
+  }
+
+  navigateToPage(targetPage) {
+    if (targetPage === this.currentPage) {
+      if (this.isAutoScanning) {
+        this.continueAutoScan();
+      }
+      return;
+    }
+
+    this.clickNextPageButton();
+  }
+
+  clickNextPageButton() {
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) {
+      if (this.isAutoScanning) {
+        this.stopAutoScan();
+      }
+      return;
+    }
+
+    // Check if next page button exists in slot 53
+    const nextPageItem = inventory.getStackInSlot(53);
+    if (nextPageItem && nextPageItem.getName() !== "Air") {
+      inventory.click(53, false, "LEFT");
+    } else {
+      if (this.isAutoScanning) {
+        this.stopAutoScan();
       }
     }
   }
@@ -544,7 +744,6 @@ class RegionsVisualCache {
         }
       }
 
-      // Draw panel with border
       Renderer.drawRect(
         0xdd000000,
         panelX - 1,
@@ -564,9 +763,9 @@ class RegionsVisualCache {
       let currentY = panelY + 10;
 
       const scannedInfo =
-        this.totalPages > 0
-          ? `(${this.scannedPages.size}/${this.totalPages} pages)`
-          : "";
+        this.totalPages === 999
+          ? `(${this.scannedPages.size}/?)`
+          : `(${this.scannedPages.size}/${this.totalPages})`;
       const title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
@@ -576,12 +775,9 @@ class RegionsVisualCache {
       );
       currentY += 20;
 
-      // Draw and update text field
       if (this.filterTextField) {
         this.filterTextField.render();
-
         const currentText = this.filterTextField.getText();
-
         if (currentText !== this.filterText) {
           this.filterText = currentText;
           this.updateFilteredRegions();
@@ -590,12 +786,11 @@ class RegionsVisualCache {
 
       currentY += 30;
 
-      this.drawRegionsList(
-        panelX,
-        currentY,
-        panelWidth,
-        panelHeight - (currentY - panelY) - 30
-      );
+      const listHeight = panelHeight - (currentY - panelY) - 50;
+      this.drawRegionsList(panelX, currentY, panelWidth, listHeight);
+
+      const buttonY = currentY + listHeight - 10;
+      this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
       const instructions = [
         "§eCAUTION: Regions with long names might not save to Last Region!",
@@ -610,6 +805,69 @@ class RegionsVisualCache {
     } catch (error) {
       ChatLib.chat(PREFIX + `§c[ERROR] Rendering failed: ${error.message}`);
     }
+  }
+
+  drawAutoScanButton(panelX, buttonY, panelWidth) {
+    const buttonHeight = 20;
+    const buttonWidth = 120;
+    const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    const isHovered =
+      mouseX >= buttonX &&
+      mouseX <= buttonX + buttonWidth &&
+      mouseY >= buttonY &&
+      mouseY <= buttonY + buttonHeight;
+
+    const buttonColor = this.isAutoScanning
+      ? isHovered
+        ? this.colors.scanButtonActive
+        : this.colors.scanButtonHover
+      : isHovered
+      ? this.colors.scanButtonHover
+      : this.colors.scanButton;
+
+    const buttonText = this.isAutoScanning
+      ? "§fStop Scanning"
+      : "§fScan All Pages";
+
+    Renderer.drawRect(buttonColor, buttonX, buttonY, buttonWidth, buttonHeight);
+    Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
+    Renderer.drawRect(
+      0xff000000,
+      buttonX,
+      buttonY + buttonHeight - 1,
+      buttonWidth,
+      1
+    );
+    Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
+    Renderer.drawRect(
+      0xff000000,
+      buttonX + buttonWidth - 1,
+      buttonY,
+      1,
+      buttonHeight
+    );
+
+    const textWidth = Renderer.getStringWidth(buttonText);
+    const textX = buttonX + (buttonWidth - textWidth) / 2;
+    const textY = buttonY + (buttonHeight - 8) / 2;
+    Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+    this.autoScanButton = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
   }
 
   drawRegionsList(panelX, listStartY, panelWidth, availableHeight) {
@@ -837,6 +1095,22 @@ class RegionsVisualCache {
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
+    // Check if auto-scan button was clicked
+    if (
+      this.autoScanButton &&
+      mouseX >= this.autoScanButton.x &&
+      mouseX <= this.autoScanButton.x + this.autoScanButton.width &&
+      mouseY >= this.autoScanButton.y &&
+      mouseY <= this.autoScanButton.y + this.autoScanButton.height
+    ) {
+      if (this.isAutoScanning) {
+        this.stopAutoScan();
+      } else {
+        this.startAutoScan();
+      }
+      return true;
+    }
+
     if (this.filterTextField) {
       this.filterTextField.mouseClicked(mouseX, mouseY, button); // Use wrapper method
     }
@@ -905,6 +1179,14 @@ class RegionsVisualCache {
         this.editRegion(this.filteredRegions[this.selectedIndex]);
         return true;
       }
+    } else if (keyCode === 57) {
+      // Space bar - toggle auto-scan
+      if (this.isAutoScanning) {
+        this.stopAutoScan();
+      } else {
+        this.startAutoScan();
+      }
+      return true;
     }
 
     return true;
@@ -959,6 +1241,7 @@ class RegionsVisualCache {
     this.scrollbarDragging = false;
     this.filterTextField = null;
     this.initializeTextField = true;
+
     this.restoreAllKeybinds();
   }
 }
