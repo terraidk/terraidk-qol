@@ -216,7 +216,8 @@ class GridMenu {
       const instrY = menuY + menuHeight + 15
       Renderer.drawStringWithShadow('§7' + instructions, instrX, instrY)
 
-      const cautionText = '§eCAUTION: The speed of the buttons is dependant on your ping'
+      const cautionText =
+        "§eCAUTION: The speed of the buttons is dependant on your ping!";
       const cautionX = menuX + (menuWidth - Renderer.getStringWidth(cautionText)) / 2
       const cautionY = menuY + menuHeight + 30
       Renderer.drawStringWithShadow(cautionText, cautionX, cautionY)

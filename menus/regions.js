@@ -121,6 +121,9 @@ class RegionsVisualCache {
     this.filterTextField = null;
     this.initializeTextField = true;
 
+    // Simplified keybind handling
+    this.keybindBlocker = null;
+
     this.colors = {
       panelBg: 0xe0000000,
       panelBorder: 0xff333333,
@@ -150,6 +153,24 @@ class RegionsVisualCache {
         PREFIX + `§c[ERROR] Failed to create text field: ${error.message}`
       );
       return null;
+    }
+  }
+
+  disableAllKeybinds() {
+    if (this.keybindBlocker) return; // Already disabled
+
+    this.keybindBlocker = register("guiKey", (char, keyCode, gui, event) => {
+      // Only allow ESC key (keyCode 1), block everything else
+      if (keyCode !== 1) {
+        cancel(event);
+      }
+    });
+  }
+
+  restoreAllKeybinds() {
+    if (this.keybindBlocker) {
+      this.keybindBlocker.unregister();
+      this.keybindBlocker = null;
     }
   }
 
@@ -312,6 +333,9 @@ class RegionsVisualCache {
     this.scrollbarDragging = false;
     this.filterTextField = null;
     this.initializeTextField = true;
+
+    // Restore keybinds when clearing cache
+    this.restoreAllKeybinds();
   }
 
   checkForRegionsGUI(attempt) {
@@ -414,6 +438,9 @@ class RegionsVisualCache {
     if (!this.isActive) {
       this.isActive = true;
       this.initializeTextField = true;
+
+      // Disable all keybinds when showing overlay
+      this.disableAllKeybinds();
     }
 
     this.isScanning = false;
@@ -560,8 +587,8 @@ class RegionsVisualCache {
       if (this.filterTextField) {
         this.filterTextField.render(); // Use wrapper method
 
-        // Check if text changed and update filter
-        const currentText = this.filterTextField.getText(); // Use wrapper method
+        const currentText = this.filterTextField.getText();
+
         if (currentText !== this.filterText) {
           this.filterText = currentText;
           this.updateFilteredRegions();
@@ -581,6 +608,7 @@ class RegionsVisualCache {
       // Draw instructions at bottom
       const instructions = [
         "§eCAUTION: Regions with long names might not save to Last Region!",
+        "§eCAUTION: The speed of the buttons is dependant on your ping!",
       ];
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
@@ -599,8 +627,9 @@ class RegionsVisualCache {
     const maxVisibleItems = Math.floor(
       availableHeight / (itemHeight + itemSpacing)
     );
-    const scrollbarWidth = 4; // Much smaller scrollbar
-    const listWidth = panelWidth - scrollbarWidth - 25;
+    const scrollbarWidth = 3; // Smaller scrollbar
+    const scrollbarMargin = 3; // Small margin from edge
+    const listWidth = panelWidth - 20; // Align with filter box (10px margin on each side)
 
     let mouseX, mouseY;
     try {
@@ -620,10 +649,17 @@ class RegionsVisualCache {
       this.filteredRegions.length
     );
 
-    // Draw scrollbar if needed (visual only)
+    // Calculate the actual height of the content being displayed
+    const visibleItemCount = endIndex - startIndex;
+    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
+
+    // Draw scrollbar if needed (tucked on the right)
     if (this.filteredRegions.length > maxVisibleItems) {
-      const scrollbarX = panelX + panelWidth - scrollbarWidth - 8;
+      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
       const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
+
+      // Use actual content height instead of full available height
+      const scrollbarHeight = actualContentHeight;
 
       // Draw scrollbar track
       Renderer.drawRect(
@@ -631,13 +667,13 @@ class RegionsVisualCache {
         scrollbarX,
         listStartY,
         scrollbarWidth,
-        availableHeight
+        scrollbarHeight
       );
 
       // Calculate thumb properties
       const thumbHeight = Math.max(
         10,
-        (maxVisibleItems / this.filteredRegions.length) * availableHeight
+        (maxVisibleItems / this.filteredRegions.length) * scrollbarHeight
       );
 
       // Fix thumb position calculation
@@ -645,10 +681,10 @@ class RegionsVisualCache {
         maxScrollRange > 0
           ? listStartY +
             (this.scrollOffset / maxScrollRange) *
-              (availableHeight - thumbHeight)
+              (scrollbarHeight - thumbHeight)
           : listStartY;
 
-      // Draw scrollbar thumb (no hover effects)
+      // Draw scrollbar thumb
       Renderer.drawRect(
         this.colors.scrollbarThumb,
         scrollbarX,
@@ -658,13 +694,13 @@ class RegionsVisualCache {
       );
     }
 
-    // Draw regions list
+    // Draw regions list (aligned with filter box)
     for (let i = startIndex; i < endIndex; i++) {
       const region = this.filteredRegions[i];
       if (!region) continue;
 
       const listIndex = i - startIndex;
-      const itemX = panelX + 5;
+      const itemX = panelX + 10; // Same margin as filter box
       const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
 
       // Check if mouse is hovering over list item (not scrollbar area)
@@ -694,8 +730,9 @@ class RegionsVisualCache {
         i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
       const regionName = region.name || "Unknown Region";
 
-      // Calculate max characters based on panel width
-      const maxChars = Math.floor(panelWidth / 8) - 8; // Rough character width estimation
+      // Calculate max characters based on available width (account for scrollbar)
+      const availableTextWidth = listWidth - 10; // 5px padding on each side
+      const maxChars = Math.floor(availableTextWidth / 6) - 2; // Rough character width estimation
       const displayName =
         regionName.length > maxChars
           ? regionName.substring(0, maxChars - 3) + "..."
@@ -707,11 +744,13 @@ class RegionsVisualCache {
         itemY + 2
       );
 
-      // Draw page info if panel is wide enough
+      // Draw page info if panel is wide enough (positioned from right edge)
       if (this.totalPages > 1 && panelWidth > 250) {
+        const pageText = `§8[P${region.page}]`;
+        const pageWidth = Renderer.getStringWidth(pageText);
         Renderer.drawStringWithShadow(
-          `§8[P${region.page}]`,
-          itemX + listWidth - 35,
+          pageText,
+          itemX + listWidth - pageWidth - 5,
           itemY + 2
         );
       }
@@ -723,7 +762,7 @@ class RegionsVisualCache {
         const coordText = `§7${formattedFrom} → ${formattedTo}`;
 
         // Truncate coordinates if panel is too narrow
-        const maxCoordLength = Math.floor(panelWidth / 6);
+        const maxCoordLength = Math.floor(availableTextWidth / 6);
         const finalCoordText =
           coordText.length > maxCoordLength
             ? coordText.substring(0, maxCoordLength - 3) + "..."
@@ -788,14 +827,29 @@ class RegionsVisualCache {
   }
 
   handleKeyPress(keyCode, char) {
-    // Let the text field handle key input first
+    // When text field is focused, we want chat-like behavior
     if (this.filterTextField && this.filterTextField.isFocused()) {
-      // Use wrapper method
-      this.filterTextField.keyTyped(char, keyCode); // Use wrapper method
-      return true; // Block all keys when text field is focused
+      if (keyCode === 1) {
+        // ESC
+        this.filterTextField.setIsFocused(false);
+        this.hideOverlay();
+        return true;
+      } else if (keyCode === 28) {
+        // Enter
+        this.filterTextField.setIsFocused(false);
+        return true;
+      } else if (keyCode === 15) {
+        // Tab
+        this.filterTextField.setIsFocused(false);
+        return true;
+      }
+
+      // For all other keys, let the text field handle them
+      this.filterTextField.keyTyped(char, keyCode);
+      return true;
     }
 
-    // Regular navigation
+    // Regular navigation when text field is not focused
     if (keyCode === 1) {
       // ESC
       this.hideOverlay();
@@ -819,8 +873,7 @@ class RegionsVisualCache {
       }
     }
 
-    // Block inventory keybinds when overlay is active
-    return true; // This blocks all other keys from reaching the game
+    return true;
   }
 
   navigateUp() {
@@ -874,6 +927,9 @@ class RegionsVisualCache {
     this.scrollbarDragging = false;
     this.filterTextField = null;
     this.initializeTextField = true;
+
+    // Restore keybinds when hiding overlay
+    this.restoreAllKeybinds();
   }
 }
 
