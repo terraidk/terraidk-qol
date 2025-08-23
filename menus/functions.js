@@ -116,15 +116,17 @@ class FunctionsVisualCache {
     this.scrollbarDragStartY = 0;
     this.scrollbarDragStartOffset = 0;
 
-    // Auto-scan functionality
     this.isAutoScanning = false;
-    this.autoScanDelay = 500; // ms between page clicks
     this.autoScanTimeout = null;
 
     this.filterTextField = null;
     this.initializeTextField = true;
 
     this.keybindBlocker = null;
+
+    this.lastFunctionInventorySnapshot = null;
+    this.isInFunctionEditGUI = false;
+    this.functionEditGUITimeout = null;
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -190,6 +192,22 @@ class FunctionsVisualCache {
       this.currentWorld = newWorld;
     });
 
+    register("chat", (functionName, event) => {
+      if (this.cachedFunctions.length > 0) {
+        this.handleFunctionCreated(functionName);
+      }
+    }).setChatCriteria("Created function ${functionName}!");
+
+    register("chat", (functionName, event) => {
+      if (this.cachedFunctions.length > 0) {
+        this.handleFunctionDeleted(functionName);
+      }
+    }).setChatCriteria("Deleted the function ${functionName}");
+
+    this.lastFunctionInventorySnapshot = null;
+    this.isInFunctionEditGUI = false;
+    this.functionEditGUITimeout = null;
+
     register("guiOpened", (guiEvent) => {
       const guiScreen = guiEvent.gui;
       if (!guiScreen) return;
@@ -197,22 +215,42 @@ class FunctionsVisualCache {
       const className = guiScreen.getClass().getSimpleName();
       if (className !== "GuiChest") return;
 
-      for (let i = 1; i <= 3; i++) {
-        setTimeout(() => {
-          this.checkForFunctionsGUI(i);
-        }, 50 * i);
+      setTimeout(() => {
+        const inventory = Player.getOpenedInventory();
+        if (!inventory) return;
+
+        const title = inventory.getName();
+        const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+
+        if (cleanTitle.startsWith("Edit: ") || cleanTitle === "Are you sure?") {
+          this.isInFunctionEditGUI = true;
+        } else {
+          for (let i = 1; i <= 3; i++) {
+            setTimeout(() => {
+              this.checkForFunctionsGUI(i);
+            }, 50 * i);
+          }
+        }
+      }, 50);
+    });
+
+    register("guiClosed", () => {
+      if (this.isInFunctionEditGUI) {
+        this.isInFunctionEditGUI = false;
+      } else if (this.isActive) {
+        this.hideOverlay();
+      }
+    });
+
+    register("guiRender", () => {
+      if (this.isActive && !this.isScanning && !this.isAutoScanning) {
+        this.performCacheValidation();
       }
     });
 
     register("itemTooltip", () => {
       if (this.isActive && !this.isScanning) {
         this.detectPageChange();
-      }
-    });
-
-    register("guiClosed", () => {
-      if (this.isActive) {
-        this.hideOverlay();
       }
     });
 
@@ -251,6 +289,139 @@ class FunctionsVisualCache {
     }).setFps(60);
   }
 
+  handleFunctionCreated(functionName) {
+    const existingFunction = this.cachedFunctions.find(
+      (f) => f.name === functionName
+    );
+
+    if (!existingFunction) {
+      const newFunction = {
+        name: functionName,
+        displayName: `§f${functionName}`,
+        description: "Newly created function - data not yet scanned",
+        descriptions: ["Newly created function - data not yet scanned"],
+        lore: [],
+        slotIndex: -1,
+        hasDescription: true,
+        ctItem: null,
+        itemId: 0,
+        itemDamage: 0,
+        page: this.currentPage || 1,
+        isPlaceholder: true,
+        createdAt: Date.now(),
+      };
+
+      this.cachedFunctions.push(newFunction);
+      this.updateFilteredFunctions();
+
+      ChatLib.chat(
+        PREFIX +
+          `§a+ Added function "${functionName}" to cache (${this.cachedFunctions.length} total)`
+      );
+    } else {
+      ChatLib.chat(
+        PREFIX + `§e Function "${functionName}" already exists in cache`
+      );
+    }
+  }
+
+  handleFunctionDeleted(functionName) {
+    const initialCount = this.cachedFunctions.length;
+
+    this.cachedFunctions = this.cachedFunctions.filter(
+      (f) => f.name !== functionName
+    );
+
+    if (this.cachedFunctions.length < initialCount) {
+      this.updateFilteredFunctions();
+
+      if (this.selectedIndex >= this.cachedFunctions.length) {
+        this.selectedIndex = -1;
+      }
+
+      ChatLib.chat(
+        PREFIX +
+          `§c- Removed function "${functionName}" from cache (${this.cachedFunctions.length} total)`
+      );
+    } else {
+      ChatLib.chat(
+        PREFIX + `§e Function "${functionName}" was not found in cache`
+      );
+    }
+  }
+
+  refreshPlaceholderFunctions() {
+    const placeholders = this.cachedFunctions.filter((f) => f.isPlaceholder);
+    if (placeholders.length > 0) {
+      ChatLib.chat(
+        PREFIX +
+          `§e${placeholders.length} placeholder function(s) detected. Consider rescanning to get full data.`
+      );
+    }
+  }
+
+  validateCacheAgainstCurrentPage() {
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const functionsRegex = /^\(\d+\/\d+\) Functions$|^Functions$/;
+
+    if (!functionsRegex.test(cleanTitle)) return;
+
+    // Get current page number
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Functions$/);
+    const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
+
+    if (
+      currentPageNum !== this.currentPage ||
+      !this.scannedPages.has(currentPageNum)
+    ) {
+      this.currentPage = currentPageNum;
+      this.scanCurrentPage();
+    }
+  }
+
+  performCacheValidation() {
+    if (!this.isActive || this.isScanning) return;
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    // Only validate if we're in the functions GUI
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const functionsRegex = /^\(\d+\/\d+\) Functions$|^Functions$/;
+
+    if (functionsRegex.test(cleanTitle)) {
+      this.validateCacheAgainstCurrentPage();
+    }
+  }
+
+  cleanStaleFunctions() {
+    const beforeCount = this.cachedFunctions.length;
+
+    this.cachedFunctions = this.cachedFunctions.filter((func) => {
+      if (func.deleted) return false;
+
+      if (
+        func.isPlaceholder &&
+        func.createdAt &&
+        Date.now() - func.createdAt > 300000
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const removedCount = beforeCount - this.cachedFunctions.length;
+    if (removedCount > 0) {
+      this.updateFilteredFunctions();
+    }
+  }
+
   handleMouseScroll(direction) {
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
@@ -267,7 +438,7 @@ class FunctionsVisualCache {
   getListAvailableHeight() {
     const screenHeight = Renderer.screen.getHeight();
     const panelHeight = this.calculatePanelDimensions().height;
-    return panelHeight - 130; // Increased to account for scan button
+    return panelHeight - 130;
   }
 
   calculatePanelDimensions() {
@@ -326,11 +497,17 @@ class FunctionsVisualCache {
     this.filterTextField = null;
     this.initializeTextField = true;
 
-    // Clear auto-scan state
     this.isAutoScanning = false;
     if (this.autoScanTimeout) {
       clearTimeout(this.autoScanTimeout);
       this.autoScanTimeout = null;
+    }
+
+    this.lastFunctionInventorySnapshot = null;
+    this.isInFunctionEditGUI = false;
+    if (this.functionEditGUITimeout) {
+      clearTimeout(this.functionEditGUITimeout);
+      this.functionEditGUITimeout = null;
     }
 
     this.restoreAllKeybinds();
@@ -363,6 +540,7 @@ class FunctionsVisualCache {
 
   detectTotalPages(inventory) {
     const nextPageItem = inventory.getStackInSlot(53);
+    const previousPageItem = inventory.getStackInSlot(45);
 
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       const lore = nextPageItem.getLore() || [];
@@ -458,7 +636,7 @@ class FunctionsVisualCache {
     );
   }
 
-  scanCurrentPage() {
+scanCurrentPage() {
     const inventory = Player.getOpenedInventory();
     if (!inventory) {
       this.isScanning = false;
@@ -467,46 +645,132 @@ class FunctionsVisualCache {
 
     this.scannedPages.add(this.currentPage);
 
-    // The functions are in specific slots in the chest GUI (same as regions)
     // prettier-ignore
     const functionSlots = [
-      10, 11, 12, 13, 14, 15, 16, // Row 1 
+      10, 11, 12, 13, 14, 15, 16, // Row 1
       19, 20, 21, 22, 23, 24, 25, // Row 2
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
+    const currentPageFunctions = new Set();
     let newFunctionsFound = 0;
+    let updatedPlaceholders = 0;
+    let renamedFunctions = 0;
 
     functionSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
         const functionData = this.parseFunctionItem(item, slotIndex);
         if (functionData) {
+          currentPageFunctions.add(functionData.name);
+
           const existingFunction = this.cachedFunctions.find(
             (f) => f.name === functionData.name
           );
+
           if (!existingFunction) {
-            this.cachedFunctions.push(functionData);
-            newFunctionsFound++;
+            const possibleRename = this.cachedFunctions.find(
+              (f) =>
+                f.page === this.currentPage &&
+                f.slotIndex === slotIndex &&
+                f.name !== functionData.name
+            );
+
+            if (possibleRename) {
+              // Only show individual rename message if 2 or fewer total renames expected
+              if (renamedFunctions < 2) {
+                ChatLib.chat(
+                  PREFIX +
+                    `§6Detected rename: "${possibleRename.name}" → "${functionData.name}"`
+                );
+              }
+
+              Object.assign(possibleRename, functionData);
+              renamedFunctions++;
+            } else {
+              this.cachedFunctions.push(functionData);
+              newFunctionsFound++;
+            }
+          } else if (existingFunction.isPlaceholder) {
+            Object.assign(existingFunction, functionData);
+            existingFunction.isPlaceholder = false;
+            updatedPlaceholders++;
+          } else {
+            Object.assign(existingFunction, functionData);
           }
         }
       }
     });
 
+    const deletedFunctions = this.cachedFunctions.filter(
+      (f) =>
+        f.page === this.currentPage &&
+        !f.isPlaceholder &&
+        !currentPageFunctions.has(f.name)
+    );
+
+    if (deletedFunctions.length > 0) {
+      deletedFunctions.forEach((func) => {
+        // Only show individual deletion message if 2 or fewer deletions
+        if (deletedFunctions.length <= 2) {
+          ChatLib.chat(PREFIX + `§cDeleted function detected: "${func.name}"`);
+        }
+        const index = this.cachedFunctions.indexOf(func);
+        if (index > -1) {
+          this.cachedFunctions.splice(index, 1);
+        }
+      });
+    }
+
     if (this.isAutoScanning) {
-      if (newFunctionsFound > 0) {
-        ChatLib.chat(
-          PREFIX +
-            `§bPage ${this.currentPage}: +${newFunctionsFound} functions (Total: ${this.cachedFunctions.length})`
-        );
+      let message = `§bPage ${this.currentPage}:`;
+      if (newFunctionsFound > 0) message += ` +${newFunctionsFound} new`;
+      if (updatedPlaceholders > 0)
+        message += ` ~${updatedPlaceholders} updated`;
+      
+      // Only show rename message if 2 or fewer renames
+      if (renamedFunctions > 0 && renamedFunctions <= 2) 
+        message += ` ↻${renamedFunctions} renamed`;
+      
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedFunctions.length > 0 && deletedFunctions.length <= 2)
+        message += ` -${deletedFunctions.length} deleted`;
+        
+      message += ` (Total: ${this.cachedFunctions.length})`;
+
+      if (
+        newFunctionsFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedFunctions > 0 && renamedFunctions <= 2) ||
+        (deletedFunctions.length > 0 && deletedFunctions.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
         World.playSound("random.orb", 1, 2);
       }
     } else {
-      if (newFunctionsFound > 0) {
-        ChatLib.chat(
-          PREFIX +
-            `§aPage ${this.currentPage} scan complete. Found ${newFunctionsFound} new functions. Total: ${this.cachedFunctions.length}`
-        );
+      let message = `§aPage ${this.currentPage} scan complete.`;
+      if (newFunctionsFound > 0)
+        message += ` Found ${newFunctionsFound} new functions.`;
+      if (updatedPlaceholders > 0)
+        message += ` Updated ${updatedPlaceholders} placeholders.`;
+      
+      // Only show rename message if 2 or fewer renames
+      if (renamedFunctions > 0 && renamedFunctions <= 2)
+        message += ` Detected ${renamedFunctions} renames.`;
+      
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedFunctions.length > 0 && deletedFunctions.length <= 2)
+        message += ` Removed ${deletedFunctions.length} deleted functions.`;
+        
+      message += ` Total: ${this.cachedFunctions.length}`;
+
+      if (
+        newFunctionsFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedFunctions > 0 && renamedFunctions <= 2) ||
+        (deletedFunctions.length > 0 && deletedFunctions.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
       }
     }
 
@@ -534,61 +798,68 @@ class FunctionsVisualCache {
     if (this.isAutoScanning || !this.isActive) return;
 
     this.isAutoScanning = true;
-    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
 
-    setTimeout(() => {
-      this.continueAutoScan();
-    }, 100);
+    const inventory = Player.getOpenedInventory();
+    const previousPageItem = inventory.getStackInSlot(45);
+
+    if (previousPageItem && previousPageItem.getName() !== "Air") {
+      inventory.click(45, false, "RIGHT");
+    }
+
+    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
+    setTimeout(() => this.continueAutoScan(), 100);
+  }
+
+  scanLastPageOnly() {
+    if (this.totalPages <= 1) {
+      this.scanCurrentPage();
+      return;
+    }
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    const nextPageItem = inventory.getStackInSlot(53);
+    if (nextPageItem && nextPageItem.getName() !== "Air") {
+      ChatLib.chat(PREFIX + `§bGoing to last page (${this.totalPages})...`);
+      inventory.click(53, false, "RIGHT");
+
+      setTimeout(() => {
+        this.scanCurrentPage();
+      }, 500);
+    } else {
+      this.scanCurrentPage();
+    }
   }
 
   continueAutoScan() {
     if (!this.isAutoScanning) return;
 
-    if (this.scannedPages.size >= this.totalPages) {
-      ChatLib.chat(
-        PREFIX +
-          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedFunctions.length} total functions.`
-      );
-      World.playSound("random.levelup", 1, 2);
-      this.isAutoScanning = false;
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) {
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 200);
       return;
     }
 
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      this.stopAutoScan();
-      return;
+    if (!this.scannedPages.has(this.currentPage)) {
+      this.scanCurrentPage();
     }
 
     const nextPageItem = inventory.getStackInSlot(53);
+
+    // left click to go to next page if it exists
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       inventory.click(53, false, "LEFT");
-
-      this.autoScanTimeout = setTimeout(() => {
-        this.continueAutoScan();
-      }, this.autoScanDelay);
-    } else {
-      if (!this.scannedPages.has(this.currentPage)) {
-        this.scanCurrentPage();
-
-        setTimeout(() => {
-          if (this.scannedPages.size >= this.totalPages) {
-            ChatLib.chat(
-              PREFIX +
-                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedFunctions.length} total functions.`
-            );
-            this.isAutoScanning = false;
-          } else {
-            this.stopAutoScan();
-          }
-        }, 100);
-      } else {
-        ChatLib.chat(
-          PREFIX + `§aTotal functions loaded: ${this.cachedFunctions.length}`
-        );
-        this.isAutoScanning = false;
-      }
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
+      return;
     }
+
+    ChatLib.chat(
+      PREFIX +
+        `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedFunctions.length} total functions.`
+    );
+    this.isAutoScanning = false;
+    this.refreshPlaceholderFunctions();
   }
 
   parseFunctionItem(item, slotIndex) {
@@ -649,6 +920,7 @@ class FunctionsVisualCache {
       itemId: itemId,
       itemDamage: itemDamage,
       page: this.currentPage,
+      isPlaceholder: false,
     };
   }
 
@@ -735,11 +1007,19 @@ class FunctionsVisualCache {
       let currentY = panelY + 10;
 
       // Draw title
+      const placeholderCount = this.cachedFunctions.filter(
+        (f) => f.isPlaceholder
+      ).length;
       const scannedInfo =
         this.totalPages === 999
           ? `(${this.scannedPages.size}/?)`
           : `(${this.scannedPages.size}/${this.totalPages})`;
-      const title = `${PREFIX}Functions (${this.cachedFunctions.length}) ${scannedInfo}`;
+
+      let title = `${PREFIX}Functions (${this.cachedFunctions.length}) ${scannedInfo}`;
+      if (placeholderCount > 0) {
+        title += ` §e[${placeholderCount} new]`;
+      }
+
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -762,14 +1042,12 @@ class FunctionsVisualCache {
       currentY += 30;
 
       // Draw functions list
-      const listHeight = panelHeight - (currentY - panelY) - 50;
+      const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawFunctionsList(panelX, currentY, panelWidth, listHeight);
 
-      // Draw auto-scan button
-      const buttonY = currentY + listHeight - 10;
+      const buttonY = currentY + listHeight + 10;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
-      // Draw instructions at bottom
       const instructions = [
         "§eCAUTION: Functions with long names might not save to Last Function!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
@@ -777,7 +1055,7 @@ class FunctionsVisualCache {
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
         const instrX = panelX + (panelWidth - instrWidth) / 2;
-        const instrY = panelY + panelHeight - 25 + index * 10;
+        const instrY = panelY + panelHeight - 35 + index * 10;
         Renderer.drawStringWithShadow(instruction, instrX, instrY);
       });
     } catch (error) {
@@ -878,6 +1156,10 @@ class FunctionsVisualCache {
         bgColor = 0xff555555; // Lighter for hover
       }
 
+      if (func.isPlaceholder) {
+        bgColor = func.isPlaceholder ? 0xff4a4a00 : bgColor;
+      }
+
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
       // Draw function icon
@@ -914,7 +1196,13 @@ class FunctionsVisualCache {
       const availableTextWidth = listWidth - iconSize - iconMargin * 3;
 
       const nameColor =
-        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
+        i === this.selectedIndex
+          ? "§a"
+          : isHovered
+          ? "§e"
+          : func.isPlaceholder
+          ? "§6"
+          : "§f";
       const functionName = func.name || "Unknown Function";
 
       const maxChars = Math.floor(availableTextWidth / 6) - 2;
@@ -923,18 +1211,20 @@ class FunctionsVisualCache {
           ? functionName.substring(0, maxChars - 3) + "..."
           : functionName;
 
+      const finalDisplayName = func.isPlaceholder
+        ? displayName + " §8[NEW]"
+        : displayName;
+
       if (hasDescription) {
-        // Draw name at top if there's a description
         Renderer.drawStringWithShadow(
-          nameColor + displayName,
+          nameColor + finalDisplayName,
           textStartX,
           itemY + 2
         );
       } else {
-        // Center the name vertically if there's no description
         const nameY = itemY + (itemHeight - 8) / 2;
         Renderer.drawStringWithShadow(
-          nameColor + displayName,
+          nameColor + finalDisplayName,
           textStartX,
           nameY
         );
@@ -954,7 +1244,6 @@ class FunctionsVisualCache {
         );
       }
 
-      // Draw function description only if it exists
       if (hasDescription) {
         let descriptionText = "";
         if (func.description) {
@@ -980,7 +1269,9 @@ class FunctionsVisualCache {
   drawFallbackIcon(x, y, size, func) {
     let color = 0xff666666;
 
-    if (func.name) {
+    if (func.isPlaceholder) {
+      color = 0xffffaa00; // Orange for new functions
+    } else if (func.name) {
       let hash = 0;
       for (let i = 0; i < func.name.length; i++) {
         hash = func.name.charCodeAt(i) + ((hash << 5) - hash);
@@ -1074,13 +1365,66 @@ class FunctionsVisualCache {
     };
   }
 
+  drawValidationButton(panelX, buttonY, panelWidth) {
+    const buttonHeight = 18;
+    const buttonWidth = 100;
+    const buttonX = panelX + panelWidth - buttonWidth - 10;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    const isHovered =
+      mouseX >= buttonX &&
+      mouseX <= buttonX + buttonWidth &&
+      mouseY >= buttonY &&
+      mouseY <= buttonY + buttonHeight;
+
+    const buttonColor = isHovered ? 0xff666666 : 0xff444444;
+
+    Renderer.drawRect(buttonColor, buttonX, buttonY, buttonWidth, buttonHeight);
+    Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
+    Renderer.drawRect(
+      0xff000000,
+      buttonX,
+      buttonY + buttonHeight - 1,
+      buttonWidth,
+      1
+    );
+    Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
+    Renderer.drawRect(
+      0xff000000,
+      buttonX + buttonWidth - 1,
+      buttonY,
+      1,
+      buttonHeight
+    );
+
+    const buttonText = "§fValidate Cache";
+    const textWidth = Renderer.getStringWidth(buttonText);
+    const textX = buttonX + (buttonWidth - textWidth) / 2;
+    const textY = buttonY + (buttonHeight - 8) / 2;
+    Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+    this.validateButton = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight,
+    };
+  }
+
   handleMouseClick(mouseX, mouseY, button) {
     if (!this.isActive || button !== 0) return false;
 
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
-    // Check if auto-scan button was clicked
     if (
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
@@ -1110,6 +1454,7 @@ class FunctionsVisualCache {
       return true;
     }
 
+    // Check if click is within panel bounds
     if (
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&

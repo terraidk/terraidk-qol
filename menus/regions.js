@@ -116,15 +116,17 @@ class RegionsVisualCache {
     this.scrollbarDragStartY = 0;
     this.scrollbarDragStartOffset = 0;
 
-    // Auto-scan functionality
     this.isAutoScanning = false;
-    this.autoScanDelay = 500; // ms between page clicks
     this.autoScanTimeout = null;
 
     this.filterTextField = null;
     this.initializeTextField = true;
 
     this.keybindBlocker = null;
+
+    this.lastRegionInventorySnapshot = null;
+    this.isInRegionEditGUI = false;
+    this.regionEditGUITimeout = null;
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -190,6 +192,28 @@ class RegionsVisualCache {
       this.currentWorld = newWorld;
     });
 
+    register("chat", (regionName, event) => {
+      if (this.cachedRegions.length > 0) {
+        this.handleRegionCreated(regionName);
+      }
+    }).setChatCriteria("Created region ${regionName}!");
+
+    register("chat", (regionName, event) => {
+      if (this.cachedRegions.length > 0) {
+        this.handleRegionDeleted(regionName);
+      }
+    }).setChatCriteria("Deleted the region ${regionName}");
+
+    register("chat", (oldName, newName, event) => {
+      if (this.cachedRegions.length > 0) {
+        this.handleRegionRenamed(oldName, newName);
+      }
+    }).setChatCriteria("Renamed region ${oldName} to ${newName}");
+
+    this.lastRegionInventorySnapshot = null;
+    this.isInRegionEditGUI = false;
+    this.regionEditGUITimeout = null;
+
     register("guiOpened", (guiEvent) => {
       const guiScreen = guiEvent.gui;
       if (!guiScreen) return;
@@ -197,22 +221,42 @@ class RegionsVisualCache {
       const className = guiScreen.getClass().getSimpleName();
       if (className !== "GuiChest") return;
 
-      for (let i = 1; i <= 3; i++) {
-        setTimeout(() => {
-          this.checkForRegionsGUI(i);
-        }, 50 * i);
+      setTimeout(() => {
+        const inventory = Player.getOpenedInventory();
+        if (!inventory) return;
+
+        const title = inventory.getName();
+        const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+
+        if (cleanTitle.startsWith("Edit: ") || cleanTitle === "Are you sure?") {
+          this.isInRegionEditGUI = true;
+        } else {
+          for (let i = 1; i <= 3; i++) {
+            setTimeout(() => {
+              this.checkForRegionsGUI(i);
+            }, 50 * i);
+          }
+        }
+      }, 50);
+    });
+
+    register("guiClosed", () => {
+      if (this.isInRegionEditGUI) {
+        this.isInRegionEditGUI = false;
+      } else if (this.isActive) {
+        this.hideOverlay();
+      }
+    });
+
+    register("guiRender", () => {
+      if (this.isActive && !this.isScanning && !this.isAutoScanning) {
+        this.performCacheValidation();
       }
     });
 
     register("itemTooltip", () => {
       if (this.isActive && !this.isScanning) {
         this.detectPageChange();
-      }
-    });
-
-    register("guiClosed", () => {
-      if (this.isActive) {
-        this.hideOverlay();
       }
     });
 
@@ -251,6 +295,158 @@ class RegionsVisualCache {
     }).setFps(60);
   }
 
+  handleRegionCreated(regionName) {
+    const existingRegion = this.cachedRegions.find(
+      (r) => r.name === regionName
+    );
+
+    if (!existingRegion) {
+      const newRegion = {
+        name: regionName,
+        displayName: `§f${regionName}`,
+        from: "Newly created region - data not yet scanned",
+        to: "Newly created region - data not yet scanned",
+        lore: [],
+        slotIndex: -1,
+        hasCoords: false,
+        ctItem: null,
+        itemId: 0,
+        itemDamage: 0,
+        page: this.currentPage || 1,
+        isPlaceholder: true,
+        createdAt: Date.now(),
+      };
+
+      this.cachedRegions.push(newRegion);
+      this.updateFilteredRegions();
+
+      ChatLib.chat(
+        PREFIX +
+          `§a+ Added region "${regionName}" to cache (${this.cachedRegions.length} total)`
+      );
+    } else {
+      ChatLib.chat(
+        PREFIX + `§e Region "${regionName}" already exists in cache`
+      );
+    }
+  }
+
+  handleRegionDeleted(regionName) {
+    const initialCount = this.cachedRegions.length;
+
+    this.cachedRegions = this.cachedRegions.filter(
+      (r) => r.name !== regionName
+    );
+
+    if (this.cachedRegions.length < initialCount) {
+      this.updateFilteredRegions();
+
+      if (this.selectedIndex >= this.cachedRegions.length) {
+        this.selectedIndex = -1;
+      }
+
+      ChatLib.chat(
+        PREFIX +
+          `§c- Removed region "${regionName}" from cache (${this.cachedRegions.length} total)`
+      );
+    } else {
+      ChatLib.chat(PREFIX + `§e Region "${regionName}" was not found in cache`);
+    }
+  }
+
+  handleRegionRenamed(oldName, newName) {
+    const region = this.cachedRegions.find((r) => r.name === oldName);
+
+    if (region) {
+      region.name = newName;
+      region.displayName = `§f${newName}`;
+      this.updateFilteredRegions();
+
+      ChatLib.chat(
+        PREFIX + `§6Renamed region "${oldName}" → "${newName}" in cache`
+      );
+    } else {
+      // If we don't have the old region, create a placeholder for the new one
+      this.handleRegionCreated(newName);
+      ChatLib.chat(
+        PREFIX +
+          `§e Region "${oldName}" not found in cache, created placeholder for "${newName}"`
+      );
+    }
+  }
+
+  refreshPlaceholderRegions() {
+    const placeholders = this.cachedRegions.filter((r) => r.isPlaceholder);
+    if (placeholders.length > 0) {
+      ChatLib.chat(
+        PREFIX +
+          `§e${placeholders.length} placeholder region(s) detected. Consider rescanning to get full data.`
+      );
+    }
+  }
+
+  validateCacheAgainstCurrentPage() {
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const regionsRegex = /^\(\d+\/\d+\) Regions$|^Regions$/;
+
+    if (!regionsRegex.test(cleanTitle)) return;
+
+    // Get current page number
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
+    const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
+
+    if (
+      currentPageNum !== this.currentPage ||
+      !this.scannedPages.has(currentPageNum)
+    ) {
+      this.currentPage = currentPageNum;
+      this.scanCurrentPage();
+    }
+  }
+
+  performCacheValidation() {
+    if (!this.isActive || this.isScanning) return;
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    // Only validate if we're in the regions GUI
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const regionsRegex = /^\(\d+\/\d+\) Regions$|^Regions$/;
+
+    if (regionsRegex.test(cleanTitle)) {
+      this.validateCacheAgainstCurrentPage();
+    }
+  }
+
+  cleanStaleRegions() {
+    const beforeCount = this.cachedRegions.length;
+
+    this.cachedRegions = this.cachedRegions.filter((region) => {
+      if (region.deleted) return false;
+
+      if (
+        region.isPlaceholder &&
+        region.createdAt &&
+        Date.now() - region.createdAt > 300000
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const removedCount = beforeCount - this.cachedRegions.length;
+    if (removedCount > 0) {
+      this.updateFilteredRegions();
+    }
+  }
+
   handleMouseScroll(direction) {
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
@@ -267,7 +463,7 @@ class RegionsVisualCache {
   getListAvailableHeight() {
     const screenHeight = Renderer.screen.getHeight();
     const panelHeight = this.calculatePanelDimensions().height;
-    return panelHeight - 130; // Increased to account for scan button
+    return panelHeight - 130;
   }
 
   calculatePanelDimensions() {
@@ -326,11 +522,17 @@ class RegionsVisualCache {
     this.filterTextField = null;
     this.initializeTextField = true;
 
-    // Clear auto-scan state
     this.isAutoScanning = false;
     if (this.autoScanTimeout) {
       clearTimeout(this.autoScanTimeout);
       this.autoScanTimeout = null;
+    }
+
+    this.lastRegionInventorySnapshot = null;
+    this.isInRegionEditGUI = false;
+    if (this.regionEditGUITimeout) {
+      clearTimeout(this.regionEditGUITimeout);
+      this.regionEditGUITimeout = null;
     }
 
     this.restoreAllKeybinds();
@@ -443,6 +645,7 @@ class RegionsVisualCache {
       }
     }
   }
+
   stopAutoScan() {
     if (!this.isAutoScanning) return;
 
@@ -467,7 +670,6 @@ class RegionsVisualCache {
 
     this.scannedPages.add(this.currentPage);
 
-    // The regions are in specific slots in the chest GUI
     // prettier-ignore
     const regionSlots = [
       10, 11, 12, 13, 14, 15, 16, // Row 1 
@@ -475,31 +677,125 @@ class RegionsVisualCache {
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
+    const currentPageRegions = new Set();
     let newRegionsFound = 0;
+    let updatedPlaceholders = 0;
+    let renamedRegions = 0;
 
     regionSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
         const regionData = this.parseRegionItem(item, slotIndex);
         if (regionData) {
+          currentPageRegions.add(regionData.name);
+
           const existingRegion = this.cachedRegions.find(
             (r) => r.name === regionData.name
           );
+
           if (!existingRegion) {
-            this.cachedRegions.push(regionData);
-            newRegionsFound++;
+            const possibleRename = this.cachedRegions.find(
+              (r) =>
+                r.page === this.currentPage &&
+                r.slotIndex === slotIndex &&
+                r.name !== regionData.name
+            );
+
+            if (possibleRename) {
+              // Only show individual rename message if 2 or fewer total renames expected
+              if (renamedRegions < 2) {
+                ChatLib.chat(
+                  PREFIX +
+                    `§6Detected rename: "${possibleRename.name}" → "${regionData.name}"`
+                );
+              }
+
+              Object.assign(possibleRename, regionData);
+              renamedRegions++;
+            } else {
+              this.cachedRegions.push(regionData);
+              newRegionsFound++;
+            }
+          } else if (existingRegion.isPlaceholder) {
+            Object.assign(existingRegion, regionData);
+            existingRegion.isPlaceholder = false;
+            updatedPlaceholders++;
+          } else {
+            Object.assign(existingRegion, regionData);
           }
         }
       }
     });
 
+    const deletedRegions = this.cachedRegions.filter(
+      (r) =>
+        r.page === this.currentPage &&
+        !r.isPlaceholder &&
+        !currentPageRegions.has(r.name)
+    );
+
+    if (deletedRegions.length > 0) {
+      deletedRegions.forEach((region) => {
+        // Only show individual deletion message if 2 or fewer deletions
+        if (deletedRegions.length <= 2) {
+          ChatLib.chat(PREFIX + `§cDeleted region detected: "${region.name}"`);
+        }
+        const index = this.cachedRegions.indexOf(region);
+        if (index > -1) {
+          this.cachedRegions.splice(index, 1);
+        }
+      });
+    }
+
     if (this.isAutoScanning) {
-      if (newRegionsFound > 0) {
-        ChatLib.chat(
-          PREFIX +
-            `§bPage ${this.currentPage}: +${newRegionsFound} regions (Total: ${this.cachedRegions.length})`
-        );
+      let message = `§bPage ${this.currentPage}:`;
+      if (newRegionsFound > 0) message += ` +${newRegionsFound} new`;
+      if (updatedPlaceholders > 0)
+        message += ` ~${updatedPlaceholders} updated`;
+
+      // Only show rename message if 2 or fewer renames
+      if (renamedRegions > 0 && renamedRegions <= 2)
+        message += ` ↻${renamedRegions} renamed`;
+
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedRegions.length > 0 && deletedRegions.length <= 2)
+        message += ` -${deletedRegions.length} deleted`;
+
+      message += ` (Total: ${this.cachedRegions.length})`;
+
+      if (
+        newRegionsFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedRegions > 0 && renamedRegions <= 2) ||
+        (deletedRegions.length > 0 && deletedRegions.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
         World.playSound("random.orb", 1, 2);
+      }
+    } else {
+      let message = `§aPage ${this.currentPage} scan complete.`;
+      if (newRegionsFound > 0)
+        message += ` Found ${newRegionsFound} new regions.`;
+      if (updatedPlaceholders > 0)
+        message += ` Updated ${updatedPlaceholders} placeholders.`;
+
+      // Only show rename message if 2 or fewer renames
+      if (renamedRegions > 0 && renamedRegions <= 2)
+        message += ` Detected ${renamedRegions} renames.`;
+
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedRegions.length > 0 && deletedRegions.length <= 2)
+        message += ` Removed ${deletedRegions.length} deleted regions.`;
+
+      message += ` Total: ${this.cachedRegions.length}`;
+
+      if (
+        newRegionsFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedRegions > 0 && renamedRegions <= 2) ||
+        (deletedRegions.length > 0 && deletedRegions.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
       }
     }
 
@@ -512,122 +808,82 @@ class RegionsVisualCache {
     }
 
     this.isScanning = false;
-  }
 
+    if (this.scannedPages.size < this.totalPages && !this.isAutoScanning) {
+      const unscannedPages = [];
+      for (let i = 1; i <= this.totalPages; i++) {
+        if (!this.scannedPages.has(i)) {
+          unscannedPages.push(i);
+        }
+      }
+    }
+  }
   startAutoScan() {
     if (this.isAutoScanning || !this.isActive) return;
 
     this.isAutoScanning = true;
-    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
 
-    setTimeout(() => {
-      this.continueAutoScan();
-    }, 100);
+    const inventory = Player.getOpenedInventory();
+    const previousPageItem = inventory.getStackInSlot(45);
+
+    if (previousPageItem && previousPageItem.getName() !== "Air") {
+      inventory.click(45, false, "RIGHT");
+    }
+
+    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
+    setTimeout(() => this.continueAutoScan(), 100);
   }
 
-  goToFirstPage() {
-    if (this.currentPage === 1) {
-      this.continueAutoScan();
+  scanLastPageOnly() {
+    if (this.totalPages <= 1) {
+      this.scanCurrentPage();
       return;
     }
 
     const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      this.stopAutoScan();
-      return;
-    }
+    if (!inventory) return;
 
-    const prevPageItem = inventory.getStackInSlot(45);
-    if (prevPageItem && prevPageItem.getName() !== "Air") {
-      inventory.click(45, false, "LEFT");
+    const nextPageItem = inventory.getStackInSlot(53);
+    if (nextPageItem && nextPageItem.getName() !== "Air") {
+      ChatLib.chat(PREFIX + `§bGoing to last page (${this.totalPages})...`);
+      inventory.click(53, false, "RIGHT");
 
-      this.autoScanTimeout = setTimeout(() => {
-        this.goToFirstPage();
-      }, this.autoScanDelay);
+      setTimeout(() => {
+        this.scanCurrentPage();
+      }, 500);
     } else {
-      this.continueAutoScan();
+      this.scanCurrentPage();
     }
   }
 
   continueAutoScan() {
     if (!this.isAutoScanning) return;
 
-    if (this.scannedPages.size >= this.totalPages) {
-      ChatLib.chat(
-        PREFIX +
-          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
-      );
-      World.playSound("random.levelup", 1, 2);
-      this.isAutoScanning = false;
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) {
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 200);
       return;
     }
 
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      this.stopAutoScan();
-      return;
+    if (!this.scannedPages.has(this.currentPage)) {
+      this.scanCurrentPage();
     }
 
     const nextPageItem = inventory.getStackInSlot(53);
+
+    // left click to go to next page if it exists
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       inventory.click(53, false, "LEFT");
-
-      this.autoScanTimeout = setTimeout(() => {
-        this.continueAutoScan();
-      }, this.autoScanDelay);
-    } else {
-      if (!this.scannedPages.has(this.currentPage)) {
-        this.scanCurrentPage();
-
-        setTimeout(() => {
-          if (this.scannedPages.size >= this.totalPages) {
-            ChatLib.chat(
-              PREFIX +
-                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
-            );
-            this.isAutoScanning = false;
-          } else {
-            this.stopAutoScan();
-          }
-        }, 100);
-      } else {
-        ChatLib.chat(
-          PREFIX + `§aTotal regions loaded: ${this.cachedRegions.length}`
-        );
-        this.isAutoScanning = false;
-      }
-    }
-  }
-
-  navigateToPage(targetPage) {
-    if (targetPage === this.currentPage) {
-      if (this.isAutoScanning) {
-        this.continueAutoScan();
-      }
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
       return;
     }
 
-    this.clickNextPageButton();
-  }
-
-  clickNextPageButton() {
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      if (this.isAutoScanning) {
-        this.stopAutoScan();
-      }
-      return;
-    }
-
-    // Check if next page button exists in slot 53
-    const nextPageItem = inventory.getStackInSlot(53);
-    if (nextPageItem && nextPageItem.getName() !== "Air") {
-      inventory.click(53, false, "LEFT");
-    } else {
-      if (this.isAutoScanning) {
-        this.stopAutoScan();
-      }
-    }
+    ChatLib.chat(
+      PREFIX +
+        `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
+    );
+    this.isAutoScanning = false;
+    this.refreshPlaceholderRegions();
   }
 
   parseRegionItem(item, slotIndex) {
@@ -682,6 +938,7 @@ class RegionsVisualCache {
       itemId: itemId,
       itemDamage: itemDamage,
       page: this.currentPage,
+      isPlaceholder: false,
     };
   }
 
@@ -744,6 +1001,7 @@ class RegionsVisualCache {
         }
       }
 
+      // Draw panel with border
       Renderer.drawRect(
         0xdd000000,
         panelX - 1,
@@ -762,11 +1020,20 @@ class RegionsVisualCache {
 
       let currentY = panelY + 10;
 
+      // Draw title
+      const placeholderCount = this.cachedRegions.filter(
+        (r) => r.isPlaceholder
+      ).length;
       const scannedInfo =
         this.totalPages === 999
           ? `(${this.scannedPages.size}/?)`
           : `(${this.scannedPages.size}/${this.totalPages})`;
-      const title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
+
+      let title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
+      if (placeholderCount > 0) {
+        title += ` §e[${placeholderCount} new]`;
+      }
+
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -775,8 +1042,10 @@ class RegionsVisualCache {
       );
       currentY += 20;
 
+      // Render filter text field
       if (this.filterTextField) {
         this.filterTextField.render();
+
         const currentText = this.filterTextField.getText();
         if (currentText !== this.filterText) {
           this.filterText = currentText;
@@ -786,10 +1055,11 @@ class RegionsVisualCache {
 
       currentY += 30;
 
-      const listHeight = panelHeight - (currentY - panelY) - 50;
+      // Draw regions list
+      const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawRegionsList(panelX, currentY, panelWidth, listHeight);
 
-      const buttonY = currentY + listHeight - 10;
+      const buttonY = currentY + listHeight + 10;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
       const instructions = [
@@ -799,12 +1069,270 @@ class RegionsVisualCache {
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
         const instrX = panelX + (panelWidth - instrWidth) / 2;
-        const instrY = panelY + panelHeight - 25 + index * 10;
+        const instrY = panelY + panelHeight - 35 + index * 10;
         Renderer.drawStringWithShadow(instruction, instrX, instrY);
       });
     } catch (error) {
       ChatLib.chat(PREFIX + `§c[ERROR] Rendering failed: ${error.message}`);
     }
+  }
+
+  drawRegionsList(panelX, listStartY, panelWidth, availableHeight) {
+    const itemHeight = 22;
+    const itemSpacing = 1;
+    const maxVisibleItems = Math.floor(
+      availableHeight / (itemHeight + itemSpacing)
+    );
+    const scrollbarWidth = 3;
+    const scrollbarMargin = 3;
+    const listWidth = panelWidth - 20;
+    const iconSize = 16;
+    const iconMargin = 4;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    this.hoveredIndex = -1;
+
+    const startIndex = this.scrollOffset;
+    const endIndex = Math.min(
+      startIndex + maxVisibleItems,
+      this.filteredRegions.length
+    );
+
+    const visibleItemCount = endIndex - startIndex;
+    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
+
+    // Draw scrollbar if needed
+    if (this.filteredRegions.length > maxVisibleItems) {
+      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
+      const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
+      const scrollbarHeight = actualContentHeight;
+
+      Renderer.drawRect(
+        this.colors.scrollbar,
+        scrollbarX,
+        listStartY,
+        scrollbarWidth,
+        scrollbarHeight
+      );
+
+      const thumbHeight = Math.max(
+        10,
+        (maxVisibleItems / this.filteredRegions.length) * scrollbarHeight
+      );
+
+      const thumbY =
+        maxScrollRange > 0
+          ? listStartY +
+            (this.scrollOffset / maxScrollRange) *
+              (scrollbarHeight - thumbHeight)
+          : listStartY;
+
+      Renderer.drawRect(
+        this.colors.scrollbarThumb,
+        scrollbarX,
+        thumbY,
+        scrollbarWidth,
+        thumbHeight
+      );
+    }
+
+    // Draw region items
+    for (let i = startIndex; i < endIndex; i++) {
+      const region = this.filteredRegions[i];
+      if (!region) continue;
+
+      const listIndex = i - startIndex;
+      const itemX = panelX + 10;
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+
+      const isHovered =
+        mouseX >= itemX &&
+        mouseX <= itemX + listWidth &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight;
+
+      if (isHovered) {
+        this.hoveredIndex = i;
+      }
+
+      let bgColor = 0xff333333;
+      if (i === this.selectedIndex) {
+        bgColor = 0xff4caf50; // Green for selected
+      } else if (isHovered) {
+        bgColor = 0xff555555; // Lighter for hover
+      }
+
+      if (region.isPlaceholder) {
+        bgColor = region.isPlaceholder ? 0xff4a4a00 : bgColor;
+      }
+
+      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
+
+      // Draw region icon
+      try {
+        if (region.ctItem) {
+          const iconX = itemX + iconMargin;
+          const iconY = itemY + (itemHeight - iconSize) / 2;
+          region.ctItem.draw(iconX, iconY, 1.0);
+        } else {
+          this.drawFallbackIcon(
+            itemX + iconMargin,
+            itemY + (itemHeight - iconSize) / 2,
+            iconSize,
+            region
+          );
+        }
+      } catch (e) {
+        this.drawFallbackIcon(
+          itemX + iconMargin,
+          itemY + (itemHeight - iconSize) / 2,
+          iconSize,
+          region
+        );
+      }
+
+      // Check if region has coordinates
+      const hasCoords =
+        region.hasCoords &&
+        region.from &&
+        region.to &&
+        region.from !== "Unknown" &&
+        region.to !== "Unknown";
+
+      // Draw region name
+      const textStartX = itemX + iconSize + iconMargin * 2;
+      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
+
+      const nameColor =
+        i === this.selectedIndex
+          ? "§a"
+          : isHovered
+          ? "§e"
+          : region.isPlaceholder
+          ? "§6"
+          : "§f";
+      const regionName = region.name || "Unknown Region";
+
+      const maxChars = Math.floor(availableTextWidth / 6) - 2;
+      const displayName =
+        regionName.length > maxChars
+          ? regionName.substring(0, maxChars - 3) + "..."
+          : regionName;
+
+      const finalDisplayName = region.isPlaceholder
+        ? displayName + " §8[NEW]"
+        : displayName;
+
+      if (hasCoords) {
+        Renderer.drawStringWithShadow(
+          nameColor + finalDisplayName,
+          textStartX,
+          itemY + 2
+        );
+      } else {
+        const nameY = itemY + (itemHeight - 8) / 2;
+        Renderer.drawStringWithShadow(
+          nameColor + finalDisplayName,
+          textStartX,
+          nameY
+        );
+      }
+
+      // Draw page number if multiple pages
+      if (this.totalPages > 1 && panelWidth > 250) {
+        const pageText = `§8[P${region.page}]`;
+        const pageWidth = Renderer.getStringWidth(pageText);
+        const pageHeight = 8;
+        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+
+        Renderer.drawStringWithShadow(
+          pageText,
+          itemX + listWidth - pageWidth - 5,
+          pageY
+        );
+      }
+
+      if (hasCoords) {
+        const formattedFrom = this.formatCoordinates(region.from);
+        const formattedTo = this.formatCoordinates(region.to);
+        const coordText = `§7${formattedFrom} → ${formattedTo}`;
+
+        const maxCoordLength = Math.floor(availableTextWidth / 6);
+        const finalCoordText =
+          coordText.length > maxCoordLength
+            ? coordText.substring(0, maxCoordLength - 3) + "..."
+            : coordText;
+
+        Renderer.drawStringWithShadow(finalCoordText, textStartX, itemY + 12);
+      } else {
+        const descText = region.isPlaceholder
+          ? "§8Newly created region - data not yet scanned"
+          : "§8No coordinates";
+        const maxDescLength = Math.floor(availableTextWidth / 6);
+        const finalDescText =
+          descText.length > maxDescLength
+            ? descText.substring(0, maxDescLength - 3) + "..."
+            : descText;
+
+        Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
+      }
+    }
+  }
+
+  drawFallbackIcon(x, y, size, region) {
+    let color = 0xff666666;
+
+    if (region.isPlaceholder) {
+      color = 0xffffaa00; // Orange for new regions
+    } else if (region.name) {
+      let hash = 0;
+      for (let i = 0; i < region.name.length; i++) {
+        hash = region.name.charCodeAt(i) + ((hash << 5) - hash);
+      }
+
+      // don't make colors too dark
+      const r = (Math.abs(hash) % 128) + 127;
+      const g = (Math.abs(hash >> 8) % 128) + 127;
+      const b = (Math.abs(hash >> 16) % 128) + 127;
+
+      color = (0xff << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    Renderer.drawRect(color, x, y, size, size);
+
+    // Draw a border
+    Renderer.drawRect(0xff000000, x, y, size, 1); // top
+    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
+    Renderer.drawRect(0xff000000, x, y, 1, size); // left
+    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
+
+    if (region.name && region.name.length > 0) {
+      const letter = region.name.charAt(0).toUpperCase();
+      const letterWidth = Renderer.getStringWidth(letter);
+      const centerX = x + (size - letterWidth) / 2;
+      const centerY = y + (size - 8) / 2;
+      Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
+    }
+  }
+
+  formatCoordinates(coords) {
+    if (!coords || coords === "Unknown") return coords;
+
+    const clean = coords.replace(/\s/g, "").replace(/[()]/g, "");
+    const parts = clean.split(",");
+    if (parts.length === 3) {
+      return `${parts[0]}, ${parts[1]}, ${parts[2]}`;
+    }
+
+    return coords;
   }
 
   drawAutoScanButton(panelX, buttonY, panelWidth) {
@@ -870,232 +1398,12 @@ class RegionsVisualCache {
     };
   }
 
-  drawRegionsList(panelX, listStartY, panelWidth, availableHeight) {
-    const itemHeight = 22;
-    const itemSpacing = 1;
-    const maxVisibleItems = Math.floor(
-      availableHeight / (itemHeight + itemSpacing)
-    );
-    const scrollbarWidth = 3;
-    const scrollbarMargin = 3;
-    const listWidth = panelWidth - 20;
-    const iconSize = 16;
-    const iconMargin = 4;
-
-    let mouseX, mouseY;
-    try {
-      mouseX = Client.getMouseX();
-      mouseY = Client.getMouseY();
-    } catch (e) {
-      mouseX = 0;
-      mouseY = 0;
-    }
-
-    this.hoveredIndex = -1;
-
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(
-      startIndex + maxVisibleItems,
-      this.filteredRegions.length
-    );
-
-    const visibleItemCount = endIndex - startIndex;
-    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
-
-    if (this.filteredRegions.length > maxVisibleItems) {
-      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
-
-      const scrollbarHeight = actualContentHeight;
-
-      Renderer.drawRect(
-        this.colors.scrollbar,
-        scrollbarX,
-        listStartY,
-        scrollbarWidth,
-        scrollbarHeight
-      );
-
-      const thumbHeight = Math.max(
-        10,
-        (maxVisibleItems / this.filteredRegions.length) * scrollbarHeight
-      );
-
-      const thumbY =
-        maxScrollRange > 0
-          ? listStartY +
-            (this.scrollOffset / maxScrollRange) *
-              (scrollbarHeight - thumbHeight)
-          : listStartY;
-
-      Renderer.drawRect(
-        this.colors.scrollbarThumb,
-        scrollbarX,
-        thumbY,
-        scrollbarWidth,
-        thumbHeight
-      );
-    }
-
-    for (let i = startIndex; i < endIndex; i++) {
-      const region = this.filteredRegions[i];
-      if (!region) continue;
-
-      const listIndex = i - startIndex;
-      const itemX = panelX + 10;
-      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
-
-      const isHovered =
-        mouseX >= itemX &&
-        mouseX <= itemX + listWidth &&
-        mouseY >= itemY &&
-        mouseY <= itemY + itemHeight;
-
-      if (isHovered) {
-        this.hoveredIndex = i;
-      }
-
-      let bgColor = 0xff333333;
-      if (i === this.selectedIndex) {
-        bgColor = 0xff4caf50; // Green for selected
-      } else if (isHovered) {
-        bgColor = 0xff555555; // Lighter for hover
-      }
-
-      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
-
-      try {
-        if (region.ctItem) {
-          const iconX = itemX + iconMargin;
-          const iconY = itemY + (itemHeight - iconSize) / 2;
-
-          region.ctItem.draw(iconX, iconY, 1.0);
-        } else {
-          this.drawFallbackIcon(
-            itemX + iconMargin,
-            itemY + (itemHeight - iconSize) / 2,
-            iconSize,
-            region
-          );
-        }
-      } catch (e) {
-        this.drawFallbackIcon(
-          itemX + iconMargin,
-          itemY + (itemHeight - iconSize) / 2,
-          iconSize,
-          region
-        );
-      }
-
-      const textStartX = itemX + iconSize + iconMargin * 2;
-      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
-
-      const nameColor =
-        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
-      const regionName = region.name || "Unknown Region";
-
-      const maxChars = Math.floor(availableTextWidth / 6) - 2;
-      const displayName =
-        regionName.length > maxChars
-          ? regionName.substring(0, maxChars - 3) + "..."
-          : regionName;
-
-      Renderer.drawStringWithShadow(
-        nameColor + displayName,
-        textStartX,
-        itemY + 2
-      );
-
-      if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${region.page}]`;
-        const pageWidth = Renderer.getStringWidth(pageText);
-        const pageHeight = 8;
-
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
-
-        Renderer.drawStringWithShadow(
-          pageText,
-          itemX + listWidth - pageWidth - 5,
-          pageY
-        );
-      }
-
-      // Format coordinates
-      if (region.hasCoords && region.from && region.to) {
-        const formattedFrom = this.formatCoordinates(region.from);
-        const formattedTo = this.formatCoordinates(region.to);
-        const coordText = `§7${formattedFrom} → ${formattedTo}`;
-
-        const maxCoordLength = Math.floor(availableTextWidth / 6);
-        const finalCoordText =
-          coordText.length > maxCoordLength
-            ? coordText.substring(0, maxCoordLength - 3) + "..."
-            : coordText;
-
-        Renderer.drawStringWithShadow(finalCoordText, textStartX, itemY + 12);
-      } else {
-        Renderer.drawStringWithShadow(
-          "§8No coordinates",
-          textStartX,
-          itemY + 12
-        );
-      }
-    }
-  }
-
-  drawFallbackIcon(x, y, size, region) {
-    let color = 0xff666666;
-
-    if (region.name) {
-      let hash = 0;
-      for (let i = 0; i < region.name.length; i++) {
-        hash = region.name.charCodeAt(i) + ((hash << 5) - hash);
-      }
-
-      // don't make colors too dark
-      const r = (Math.abs(hash) % 128) + 127;
-      const g = (Math.abs(hash >> 8) % 128) + 127;
-      const b = (Math.abs(hash >> 16) % 128) + 127;
-
-      color = (0xff << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    Renderer.drawRect(color, x, y, size, size);
-
-    // Draw a border
-    Renderer.drawRect(0xff000000, x, y, size, 1); // top
-    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
-    Renderer.drawRect(0xff000000, x, y, 1, size); // left
-    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
-
-    if (region.name && region.name.length > 0) {
-      const letter = region.name.charAt(0).toUpperCase();
-      const letterWidth = Renderer.getStringWidth(letter);
-      const centerX = x + (size - letterWidth) / 2;
-      const centerY = y + (size - 8) / 2;
-      Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
-    }
-  }
-
-  formatCoordinates(coords) {
-    if (!coords || coords === "Unknown") return coords;
-
-    const clean = coords.replace(/\s/g, "").replace(/[()]/g, "");
-    const parts = clean.split(",");
-    if (parts.length === 3) {
-      return `${parts[0]}, ${parts[1]}, ${parts[2]}`;
-    }
-
-    return coords;
-  }
-
   handleMouseClick(mouseX, mouseY, button) {
     if (!this.isActive || button !== 0) return false;
 
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
-    // Check if auto-scan button was clicked
     if (
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
@@ -1112,7 +1420,7 @@ class RegionsVisualCache {
     }
 
     if (this.filterTextField) {
-      this.filterTextField.mouseClicked(mouseX, mouseY, button); // Use wrapper method
+      this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
     if (
@@ -1125,6 +1433,7 @@ class RegionsVisualCache {
       return true;
     }
 
+    // Check if click is within panel bounds
     if (
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&

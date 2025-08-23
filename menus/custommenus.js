@@ -116,15 +116,17 @@ class MenusVisualCache {
     this.scrollbarDragStartY = 0;
     this.scrollbarDragStartOffset = 0;
 
-    // Auto-scan functionality
     this.isAutoScanning = false;
-    this.autoScanDelay = 500; // ms between page clicks
     this.autoScanTimeout = null;
 
     this.filterTextField = null;
     this.initializeTextField = true;
 
     this.keybindBlocker = null;
+
+    this.lastMenuInventorySnapshot = null;
+    this.isInMenuEditGUI = false;
+    this.menuEditGUITimeout = null;
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -190,6 +192,22 @@ class MenusVisualCache {
       this.currentWorld = newWorld;
     });
 
+    register("chat", (menuName, event) => {
+      if (this.cachedMenus.length > 0) {
+        this.handleMenuCreated(menuName);
+      }
+    }).setChatCriteria("Created custom menu with the title ${menuName}!");
+
+    register("chat", (menuName, event) => {
+      if (this.cachedMenus.length > 0) {
+        this.handleMenuDeleted(menuName);
+      }
+    }).setChatCriteria("Deleted the menu ${menuName}");
+
+    this.lastMenuInventorySnapshot = null;
+    this.isInMenuEditGUI = false;
+    this.menuEditGUITimeout = null;
+
     register("guiOpened", (guiEvent) => {
       const guiScreen = guiEvent.gui;
       if (!guiScreen) return;
@@ -197,22 +215,42 @@ class MenusVisualCache {
       const className = guiScreen.getClass().getSimpleName();
       if (className !== "GuiChest") return;
 
-      for (let i = 1; i <= 3; i++) {
-        setTimeout(() => {
-          this.checkForMenusGUI(i);
-        }, 50 * i);
+      setTimeout(() => {
+        const inventory = Player.getOpenedInventory();
+        if (!inventory) return;
+
+        const title = inventory.getName();
+        const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+
+        if (cleanTitle.startsWith("Edit: ") || cleanTitle === "Are you sure?") {
+          this.isInMenuEditGUI = true;
+        } else {
+          for (let i = 1; i <= 3; i++) {
+            setTimeout(() => {
+              this.checkForMenusGUI(i);
+            }, 50 * i);
+          }
+        }
+      }, 50);
+    });
+
+    register("guiClosed", () => {
+      if (this.isInMenuEditGUI) {
+        this.isInMenuEditGUI = false;
+      } else if (this.isActive) {
+        this.hideOverlay();
+      }
+    });
+
+    register("guiRender", () => {
+      if (this.isActive && !this.isScanning && !this.isAutoScanning) {
+        this.performCacheValidation();
       }
     });
 
     register("itemTooltip", () => {
       if (this.isActive && !this.isScanning) {
         this.detectPageChange();
-      }
-    });
-
-    register("guiClosed", () => {
-      if (this.isActive) {
-        this.hideOverlay();
       }
     });
 
@@ -251,6 +289,131 @@ class MenusVisualCache {
     }).setFps(60);
   }
 
+  handleMenuCreated(menuName) {
+    const existingMenu = this.cachedMenus.find((m) => m.name === menuName);
+
+    if (!existingMenu) {
+      const newMenu = {
+        name: menuName,
+        displayName: `§f${menuName}`,
+        description: "Newly created menu - data not yet scanned",
+        descriptions: ["Newly created menu - data not yet scanned"],
+        lore: [],
+        slotIndex: -1,
+        hasDescription: true,
+        ctItem: null,
+        itemId: 0,
+        itemDamage: 0,
+        page: this.currentPage || 1,
+        isPlaceholder: true,
+        createdAt: Date.now(),
+      };
+
+      this.cachedMenus.push(newMenu);
+      this.updateFilteredMenus();
+
+      ChatLib.chat(
+        PREFIX +
+          `§a+ Added menu "${menuName}" to cache (${this.cachedMenus.length} total)`
+      );
+    } else {
+      ChatLib.chat(PREFIX + `§e Menu "${menuName}" already exists in cache`);
+    }
+  }
+
+  handleMenuDeleted(menuName) {
+    const initialCount = this.cachedMenus.length;
+
+    this.cachedMenus = this.cachedMenus.filter((m) => m.name !== menuName);
+
+    if (this.cachedMenus.length < initialCount) {
+      this.updateFilteredMenus();
+
+      if (this.selectedIndex >= this.cachedMenus.length) {
+        this.selectedIndex = -1;
+      }
+
+      ChatLib.chat(
+        PREFIX +
+          `§c- Removed menu "${menuName}" from cache (${this.cachedMenus.length} total)`
+      );
+    } else {
+      ChatLib.chat(PREFIX + `§e Menu "${menuName}" was not found in cache`);
+    }
+  }
+
+  refreshPlaceholderMenus() {
+    const placeholders = this.cachedMenus.filter((m) => m.isPlaceholder);
+    if (placeholders.length > 0) {
+      ChatLib.chat(
+        PREFIX +
+          `§e${placeholders.length} placeholder menu(s) detected. Consider rescanning to get full data.`
+      );
+    }
+  }
+
+  validateCacheAgainstCurrentPage() {
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/;
+
+    if (!menusRegex.test(cleanTitle)) return;
+
+    // Get current page number
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/);
+    const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
+
+    if (
+      currentPageNum !== this.currentPage ||
+      !this.scannedPages.has(currentPageNum)
+    ) {
+      this.currentPage = currentPageNum;
+      this.scanCurrentPage();
+    }
+  }
+
+  performCacheValidation() {
+    if (!this.isActive || this.isScanning) return;
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    // Only validate if we're in the menus GUI
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/;
+
+    if (menusRegex.test(cleanTitle)) {
+      this.validateCacheAgainstCurrentPage();
+    }
+  }
+
+  cleanStaleMenus() {
+    const beforeCount = this.cachedMenus.length;
+
+    this.cachedMenus = this.cachedMenus.filter((menu) => {
+      if (menu.deleted) return false;
+
+      if (
+        menu.isPlaceholder &&
+        menu.createdAt &&
+        Date.now() - menu.createdAt > 300000
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const removedCount = beforeCount - this.cachedMenus.length;
+    if (removedCount > 0) {
+      this.updateFilteredMenus();
+    }
+  }
+
   handleMouseScroll(direction) {
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
@@ -264,7 +427,7 @@ class MenusVisualCache {
   getListAvailableHeight() {
     const screenHeight = Renderer.screen.getHeight();
     const panelHeight = this.calculatePanelDimensions().height;
-    return panelHeight - 130; // Increased to account for scan button
+    return panelHeight - 130;
   }
 
   calculatePanelDimensions() {
@@ -323,11 +486,17 @@ class MenusVisualCache {
     this.filterTextField = null;
     this.initializeTextField = true;
 
-    // Clear auto-scan state
     this.isAutoScanning = false;
     if (this.autoScanTimeout) {
       clearTimeout(this.autoScanTimeout);
       this.autoScanTimeout = null;
+    }
+
+    this.lastMenuInventorySnapshot = null;
+    this.isInMenuEditGUI = false;
+    if (this.menuEditGUITimeout) {
+      clearTimeout(this.menuEditGUITimeout);
+      this.menuEditGUITimeout = null;
     }
 
     this.restoreAllKeybinds();
@@ -360,6 +529,7 @@ class MenusVisualCache {
 
   detectTotalPages(inventory) {
     const nextPageItem = inventory.getStackInSlot(53);
+    const previousPageItem = inventory.getStackInSlot(45);
 
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       const lore = nextPageItem.getLore() || [];
@@ -464,7 +634,6 @@ class MenusVisualCache {
 
     this.scannedPages.add(this.currentPage);
 
-    // The menus are in specific slots in the chest GUI
     // prettier-ignore
     const menuSlots = [
       10, 11, 12, 13, 14, 15, 16, // Row 1 
@@ -472,38 +641,124 @@ class MenusVisualCache {
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
+    const currentPageMenus = new Set();
     let newMenusFound = 0;
+    let updatedPlaceholders = 0;
+    let renamedMenus = 0;
 
     menuSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
-        const menuData = this.parseMenuitem(item, slotIndex);
+        const menuData = this.parseMenuItem(item, slotIndex);
         if (menuData) {
+          currentPageMenus.add(menuData.name);
+
           const existingMenu = this.cachedMenus.find(
             (m) => m.name === menuData.name
           );
+
           if (!existingMenu) {
-            this.cachedMenus.push(menuData);
-            newMenusFound++;
+            const possibleRename = this.cachedMenus.find(
+              (m) =>
+                m.page === this.currentPage &&
+                m.slotIndex === slotIndex &&
+                m.name !== menuData.name
+            );
+
+            if (possibleRename) {
+              // Only show individual rename message if 2 or fewer total renames expected
+              if (renamedMenus < 2) {
+                ChatLib.chat(
+                  PREFIX +
+                    `§6Detected rename: "${possibleRename.name}" → "${menuData.name}"`
+                );
+              }
+
+              Object.assign(possibleRename, menuData);
+              renamedMenus++;
+            } else {
+              this.cachedMenus.push(menuData);
+              newMenusFound++;
+            }
+          } else if (existingMenu.isPlaceholder) {
+            Object.assign(existingMenu, menuData);
+            existingMenu.isPlaceholder = false;
+            updatedPlaceholders++;
+          } else {
+            Object.assign(existingMenu, menuData);
           }
         }
       }
     });
 
+    const deletedMenus = this.cachedMenus.filter(
+      (m) =>
+        m.page === this.currentPage &&
+        !m.isPlaceholder &&
+        !currentPageMenus.has(m.name)
+    );
+
+    if (deletedMenus.length > 0) {
+      deletedMenus.forEach((menu) => {
+        // Only show individual deletion message if 2 or fewer deletions
+        if (deletedMenus.length <= 2) {
+          ChatLib.chat(PREFIX + `§cDeleted menu detected: "${menu.name}"`);
+        }
+        const index = this.cachedMenus.indexOf(menu);
+        if (index > -1) {
+          this.cachedMenus.splice(index, 1);
+        }
+      });
+    }
+
     if (this.isAutoScanning) {
-      if (newMenusFound > 0) {
-        ChatLib.chat(
-          PREFIX +
-            `§bPage ${this.currentPage}: +${newMenusFound} menus (Total: ${this.cachedMenus.length})`
-        );
+      let message = `§bPage ${this.currentPage}:`;
+      if (newMenusFound > 0) message += ` +${newMenusFound} new`;
+      if (updatedPlaceholders > 0)
+        message += ` ~${updatedPlaceholders} updated`;
+
+      // Only show rename message if 2 or fewer renames
+      if (renamedMenus > 0 && renamedMenus <= 2)
+        message += ` ↻${renamedMenus} renamed`;
+
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedMenus.length > 0 && deletedMenus.length <= 2)
+        message += ` -${deletedMenus.length} deleted`;
+
+      message += ` (Total: ${this.cachedMenus.length})`;
+
+      if (
+        newMenusFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedMenus > 0 && renamedMenus <= 2) ||
+        (deletedMenus.length > 0 && deletedMenus.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
         World.playSound("random.orb", 1, 2);
       }
     } else {
-      if (newMenusFound > 0) {
-        ChatLib.chat(
-          PREFIX +
-            `§aPage ${this.currentPage} scan complete. Found ${newMenusFound} new menus. Total: ${this.cachedMenus.length}`
-        );
+      let message = `§aPage ${this.currentPage} scan complete.`;
+      if (newMenusFound > 0) message += ` Found ${newMenusFound} new menus.`;
+      if (updatedPlaceholders > 0)
+        message += ` Updated ${updatedPlaceholders} placeholders.`;
+
+      // Only show rename message if 2 or fewer renames
+      if (renamedMenus > 0 && renamedMenus <= 2)
+        message += ` Detected ${renamedMenus} renames.`;
+
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedMenus.length > 0 && deletedMenus.length <= 2)
+        message += ` Removed ${deletedMenus.length} deleted menus.`;
+
+      message += ` Total: ${this.cachedMenus.length}`;
+
+      if (
+        newMenusFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedMenus > 0 && renamedMenus <= 2) ||
+        (deletedMenus.length > 0 && deletedMenus.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
       }
     }
 
@@ -531,64 +786,71 @@ class MenusVisualCache {
     if (this.isAutoScanning || !this.isActive) return;
 
     this.isAutoScanning = true;
-    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
 
-    setTimeout(() => {
-      this.continueAutoScan();
-    }, 100);
+    const inventory = Player.getOpenedInventory();
+    const previousPageItem = inventory.getStackInSlot(45);
+
+    if (previousPageItem && previousPageItem.getName() !== "Air") {
+      inventory.click(45, false, "RIGHT");
+    }
+
+    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
+    setTimeout(() => this.continueAutoScan(), 100);
+  }
+
+  scanLastPageOnly() {
+    if (this.totalPages <= 1) {
+      this.scanCurrentPage();
+      return;
+    }
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    const nextPageItem = inventory.getStackInSlot(53);
+    if (nextPageItem && nextPageItem.getName() !== "Air") {
+      ChatLib.chat(PREFIX + `§bGoing to last page (${this.totalPages})...`);
+      inventory.click(53, false, "RIGHT");
+
+      setTimeout(() => {
+        this.scanCurrentPage();
+      }, 500);
+    } else {
+      this.scanCurrentPage();
+    }
   }
 
   continueAutoScan() {
     if (!this.isAutoScanning) return;
 
-    if (this.scannedPages.size >= this.totalPages) {
-      ChatLib.chat(
-        PREFIX +
-          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedMenus.length} total menus.`
-      );
-      World.playSound("random.levelup", 1, 2);
-      this.isAutoScanning = false;
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) {
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 200);
       return;
     }
 
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      this.stopAutoScan();
-      return;
+    if (!this.scannedPages.has(this.currentPage)) {
+      this.scanCurrentPage();
     }
 
     const nextPageItem = inventory.getStackInSlot(53);
+
+    // left click to go to next page if it exists
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       inventory.click(53, false, "LEFT");
-
-      this.autoScanTimeout = setTimeout(() => {
-        this.continueAutoScan();
-      }, this.autoScanDelay);
-    } else {
-      if (!this.scannedPages.has(this.currentPage)) {
-        this.scanCurrentPage();
-
-        setTimeout(() => {
-          if (this.scannedPages.size >= this.totalPages) {
-            ChatLib.chat(
-              PREFIX +
-                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedMenus.length} total menus.`
-            );
-            this.isAutoScanning = false;
-          } else {
-            this.stopAutoScan();
-          }
-        }, 100);
-      } else {
-        ChatLib.chat(
-          PREFIX + `§aTotal menus loaded: ${this.cachedMenus.length}`
-        );
-        this.isAutoScanning = false;
-      }
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
+      return;
     }
+
+    ChatLib.chat(
+      PREFIX +
+        `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedMenus.length} total menus.`
+    );
+    this.isAutoScanning = false;
+    this.refreshPlaceholderMenus();
   }
 
-  parseMenuitem(item, slotIndex) {
+  parseMenuItem(item, slotIndex) {
     const itemName = item.getName();
     const cleanName = itemName.replace(/§[0-9a-fk-or]/g, "");
     const lore = item.getLore();
@@ -646,6 +908,7 @@ class MenusVisualCache {
       itemId: itemId,
       itemDamage: itemDamage,
       page: this.currentPage,
+      isPlaceholder: false,
     };
   }
 
@@ -729,11 +992,19 @@ class MenusVisualCache {
       let currentY = panelY + 10;
 
       // Draw title
+      const placeholderCount = this.cachedMenus.filter(
+        (m) => m.isPlaceholder
+      ).length;
       const scannedInfo =
         this.totalPages === 999
           ? `(${this.scannedPages.size}/?)`
           : `(${this.scannedPages.size}/${this.totalPages})`;
-      const title = `${PREFIX}Custom Menus (${this.cachedMenus.length}) ${scannedInfo}`;
+
+      let title = `${PREFIX}Custom Menus (${this.cachedMenus.length}) ${scannedInfo}`;
+      if (placeholderCount > 0) {
+        title += ` §e[${placeholderCount} new]`;
+      }
+
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -756,14 +1027,12 @@ class MenusVisualCache {
       currentY += 30;
 
       // Draw menus list
-      const listHeight = panelHeight - (currentY - panelY) - 50;
+      const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawMenusList(panelX, currentY, panelWidth, listHeight);
 
-      // Draw auto-scan button
-      const buttonY = currentY + listHeight - 10;
+      const buttonY = currentY + listHeight + 10;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
-      // Draw instructions at bottom
       const instructions = [
         "§eCAUTION: Menus with long names might not save to Last Menu!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
@@ -771,7 +1040,7 @@ class MenusVisualCache {
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
         const instrX = panelX + (panelWidth - instrWidth) / 2;
-        const instrY = panelY + panelHeight - 25 + index * 10;
+        const instrY = panelY + panelHeight - 35 + index * 10;
         Renderer.drawStringWithShadow(instruction, instrX, instrY);
       });
     } catch (error) {
@@ -872,6 +1141,10 @@ class MenusVisualCache {
         bgColor = 0xff555555; // Lighter for hover
       }
 
+      if (menu.isPlaceholder) {
+        bgColor = menu.isPlaceholder ? 0xff4a4a00 : bgColor;
+      }
+
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
       // Draw menu icon
@@ -908,7 +1181,13 @@ class MenusVisualCache {
       const availableTextWidth = listWidth - iconSize - iconMargin * 3;
 
       const nameColor =
-        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
+        i === this.selectedIndex
+          ? "§a"
+          : isHovered
+          ? "§e"
+          : menu.isPlaceholder
+          ? "§6"
+          : "§f";
       const menuName = menu.name || "Unknown Menu";
 
       const maxChars = Math.floor(availableTextWidth / 6) - 2;
@@ -917,18 +1196,20 @@ class MenusVisualCache {
           ? menuName.substring(0, maxChars - 3) + "..."
           : menuName;
 
+      const finalDisplayName = menu.isPlaceholder
+        ? displayName + " §8[NEW]"
+        : displayName;
+
       if (hasDescription) {
-        // Draw name at top if there's a description
         Renderer.drawStringWithShadow(
-          nameColor + displayName,
+          nameColor + finalDisplayName,
           textStartX,
           itemY + 2
         );
       } else {
-        // Center the name vertically if there's no description
         const nameY = itemY + (itemHeight - 8) / 2;
         Renderer.drawStringWithShadow(
-          nameColor + displayName,
+          nameColor + finalDisplayName,
           textStartX,
           nameY
         );
@@ -948,7 +1229,6 @@ class MenusVisualCache {
         );
       }
 
-      // Draw menu description only if it exists
       if (hasDescription) {
         let descriptionText = "";
         if (menu.description) {
@@ -974,7 +1254,9 @@ class MenusVisualCache {
   drawFallbackIcon(x, y, size, menu) {
     let color = 0xff666666;
 
-    if (menu.name) {
+    if (menu.isPlaceholder) {
+      color = 0xffffaa00; // Orange for new menus
+    } else if (menu.name) {
       let hash = 0;
       for (let i = 0; i < menu.name.length; i++) {
         hash = menu.name.charCodeAt(i) + ((hash << 5) - hash);
@@ -1074,7 +1356,6 @@ class MenusVisualCache {
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
-    // Check if auto-scan button was clicked
     if (
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
@@ -1104,6 +1385,7 @@ class MenusVisualCache {
       return true;
     }
 
+    // Check if click is within panel bounds
     if (
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&

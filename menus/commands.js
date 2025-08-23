@@ -116,15 +116,18 @@ class CommandsVisualCache {
     this.scrollbarDragStartY = 0;
     this.scrollbarDragStartOffset = 0;
 
-    // Auto-scan functionality
     this.isAutoScanning = false;
-    this.autoScanDelay = 500; // ms between page clicks
     this.autoScanTimeout = null;
 
     this.filterTextField = null;
     this.initializeTextField = true;
 
     this.keybindBlocker = null;
+
+    // Command edit GUI detection
+    this.lastCommandInventorySnapshot = null;
+    this.isInCommandEditGUI = false;
+    this.commandEditGUITimeout = null;
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -190,6 +193,25 @@ class CommandsVisualCache {
       this.currentWorld = newWorld;
     });
 
+    // Command creation detection
+    register("chat", (commandName, event) => {
+      if (this.cachedCommands.length > 0) {
+        this.handleCommandCreated(commandName);
+      }
+    }).setChatCriteria("Created command ${commandName}!");
+
+    // Command deletion detection
+    register("chat", (commandName, event) => {
+      if (this.cachedCommands.length > 0) {
+        this.handleCommandDeleted(commandName);
+      }
+    }).setChatCriteria("Deleted the command ${commandName}");
+
+    // Initialize command edit GUI detection state
+    this.lastCommandInventorySnapshot = null;
+    this.isInCommandEditGUI = false;
+    this.commandEditGUITimeout = null;
+
     register("guiOpened", (guiEvent) => {
       const guiScreen = guiEvent.gui;
       if (!guiScreen) return;
@@ -197,22 +219,46 @@ class CommandsVisualCache {
       const className = guiScreen.getClass().getSimpleName();
       if (className !== "GuiChest") return;
 
-      for (let i = 1; i <= 3; i++) {
-        setTimeout(() => {
-          this.checkForCommandsGUI(i);
-        }, 50 * i);
-      }
-    });
+      setTimeout(() => {
+        const inventory = Player.getOpenedInventory();
+        if (!inventory) return;
 
-    register("itemTooltip", () => {
-      if (this.isActive && !this.isScanning) {
-        this.detectPageChange();
-      }
+        const title = inventory.getName();
+        const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+
+        // Detect command edit GUIs
+        if (cleanTitle.startsWith("Edit: ") || cleanTitle === "Are you sure?") {
+          this.isInCommandEditGUI = true;
+        } else {
+          // Check for commands GUI with multiple attempts
+          for (let i = 1; i <= 3; i++) {
+            setTimeout(() => {
+              this.checkForCommandsGUI(i);
+            }, 50 * i);
+          }
+        }
+      }, 50);
     });
 
     register("guiClosed", () => {
-      if (this.isActive) {
+      if (this.isInCommandEditGUI) {
+        this.isInCommandEditGUI = false;
+      } else if (this.isActive) {
         this.hideOverlay();
+      }
+    });
+
+    // Cache validation during GUI render
+    register("guiRender", () => {
+      if (this.isActive && !this.isScanning && !this.isAutoScanning) {
+        this.performCacheValidation();
+      }
+    });
+
+    // Page change detection
+    register("itemTooltip", () => {
+      if (this.isActive && !this.isScanning) {
+        this.detectPageChange();
       }
     });
 
@@ -251,6 +297,140 @@ class CommandsVisualCache {
     }).setFps(60);
   }
 
+  handleCommandCreated(commandName) {
+    const existingCommand = this.cachedCommands.find(
+      (c) => c.name === commandName
+    );
+
+    if (!existingCommand) {
+      const newCommand = {
+        name: commandName,
+        displayName: `§f${commandName}`,
+        description: "Newly created command - data not yet scanned",
+        descriptions: ["Newly created command - data not yet scanned"],
+        lore: [],
+        slotIndex: -1,
+        hasDescription: true,
+        ctItem: null,
+        itemId: 0,
+        itemDamage: 0,
+        page: this.currentPage || 1,
+        isPlaceholder: true,
+        createdAt: Date.now(),
+      };
+
+      this.cachedCommands.push(newCommand);
+      this.updateFilteredCommands();
+
+      ChatLib.chat(
+        PREFIX +
+          `§a+ Added command "${commandName}" to cache (${this.cachedCommands.length} total)`
+      );
+    } else {
+      ChatLib.chat(
+        PREFIX + `§e Command "${commandName}" already exists in cache`
+      );
+    }
+  }
+
+  handleCommandDeleted(commandName) {
+    const initialCount = this.cachedCommands.length;
+
+    this.cachedCommands = this.cachedCommands.filter(
+      (c) => c.name !== commandName
+    );
+
+    if (this.cachedCommands.length < initialCount) {
+      this.updateFilteredCommands();
+
+      if (this.selectedIndex >= this.cachedCommands.length) {
+        this.selectedIndex = -1;
+      }
+
+      ChatLib.chat(
+        PREFIX +
+          `§c- Removed command "${commandName}" from cache (${this.cachedCommands.length} total)`
+      );
+    } else {
+      ChatLib.chat(
+        PREFIX + `§e Command "${commandName}" was not found in cache`
+      );
+    }
+  }
+
+  refreshPlaceholderCommands() {
+    const placeholders = this.cachedCommands.filter((c) => c.isPlaceholder);
+    if (placeholders.length > 0) {
+      ChatLib.chat(
+        PREFIX +
+          `§e${placeholders.length} placeholder command(s) detected. Consider rescanning to get full data.`
+      );
+    }
+  }
+
+  validateCacheAgainstCurrentPage() {
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const commandsRegex = /^\(\d+\/\d+\) Commands$|^Commands$/;
+
+    if (!commandsRegex.test(cleanTitle)) return;
+
+    // Get current page number
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Commands$/);
+    const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
+
+    if (
+      currentPageNum !== this.currentPage ||
+      !this.scannedPages.has(currentPageNum)
+    ) {
+      this.currentPage = currentPageNum;
+      this.scanCurrentPage();
+    }
+  }
+
+  performCacheValidation() {
+    if (!this.isActive || this.isScanning) return;
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    // Only validate if we're in the commands GUI
+    const title = inventory.getName();
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const commandsRegex = /^\(\d+\/\d+\) Commands$|^Commands$/;
+
+    if (commandsRegex.test(cleanTitle)) {
+      this.validateCacheAgainstCurrentPage();
+    }
+  }
+
+  cleanStaleCommands() {
+    const beforeCount = this.cachedCommands.length;
+
+    this.cachedCommands = this.cachedCommands.filter((cmd) => {
+      if (cmd.deleted) return false;
+
+      // Remove stale placeholder commands older than 5 minutes
+      if (
+        cmd.isPlaceholder &&
+        cmd.createdAt &&
+        Date.now() - cmd.createdAt > 300000
+      ) {
+        return false;
+      }
+
+      return true;
+    });
+
+    const removedCount = beforeCount - this.cachedCommands.length;
+    if (removedCount > 0) {
+      this.updateFilteredCommands();
+    }
+  }
+
   handleMouseScroll(direction) {
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
@@ -267,7 +447,7 @@ class CommandsVisualCache {
   getListAvailableHeight() {
     const screenHeight = Renderer.screen.getHeight();
     const panelHeight = this.calculatePanelDimensions().height;
-    return panelHeight - 130; // Increased to account for scan button
+    return panelHeight - 130;
   }
 
   calculatePanelDimensions() {
@@ -326,11 +506,17 @@ class CommandsVisualCache {
     this.filterTextField = null;
     this.initializeTextField = true;
 
-    // Clear auto-scan state
     this.isAutoScanning = false;
     if (this.autoScanTimeout) {
       clearTimeout(this.autoScanTimeout);
       this.autoScanTimeout = null;
+    }
+
+    this.lastCommandInventorySnapshot = null;
+    this.isInCommandEditGUI = false;
+    if (this.commandEditGUITimeout) {
+      clearTimeout(this.commandEditGUITimeout);
+      this.commandEditGUITimeout = null;
     }
 
     this.restoreAllKeybinds();
@@ -363,6 +549,7 @@ class CommandsVisualCache {
 
   detectTotalPages(inventory) {
     const nextPageItem = inventory.getStackInSlot(53);
+    const previousPageItem = inventory.getStackInSlot(45);
 
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       const lore = nextPageItem.getLore() || [];
@@ -467,7 +654,6 @@ class CommandsVisualCache {
 
     this.scannedPages.add(this.currentPage);
 
-    // The commands are in specific slots in the chest GUI
     // prettier-ignore
     const commandSlots = [
       10, 11, 12, 13, 14, 15, 16, // Row 1 
@@ -475,38 +661,113 @@ class CommandsVisualCache {
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
+    const currentPageCommands = new Set();
     let newCommandsFound = 0;
+    let updatedPlaceholders = 0;
+    let renamedCommands = 0;
 
     commandSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
         const commandData = this.parseCommandItem(item, slotIndex);
         if (commandData) {
+          currentPageCommands.add(commandData.name);
+
           const existingCommand = this.cachedCommands.find(
             (c) => c.name === commandData.name
           );
+
           if (!existingCommand) {
-            this.cachedCommands.push(commandData);
-            newCommandsFound++;
+            const possibleRename = this.cachedCommands.find(
+              (c) =>
+                c.page === this.currentPage &&
+                c.slotIndex === slotIndex &&
+                c.name !== commandData.name
+            );
+
+            if (possibleRename) {
+              Object.assign(possibleRename, commandData);
+              renamedCommands++;
+            } else {
+              this.cachedCommands.push(commandData);
+              newCommandsFound++;
+            }
+          } else if (existingCommand.isPlaceholder) {
+            Object.assign(existingCommand, commandData);
+            existingCommand.isPlaceholder = false;
+            updatedPlaceholders++;
+          } else {
+            Object.assign(existingCommand, commandData);
           }
         }
       }
     });
 
+    const deletedCommands = this.cachedCommands.filter(
+      (c) =>
+        c.page === this.currentPage &&
+        !c.isPlaceholder &&
+        !currentPageCommands.has(c.name)
+    );
+
+    if (deletedCommands.length > 0) {
+      deletedCommands.forEach((cmd) => {
+        const index = this.cachedCommands.indexOf(cmd);
+        if (index > -1) {
+          this.cachedCommands.splice(index, 1);
+        }
+      });
+    }
+
     if (this.isAutoScanning) {
-      if (newCommandsFound > 0) {
-        ChatLib.chat(
-          PREFIX +
-            `§bPage ${this.currentPage}: +${newCommandsFound} commands (Total: ${this.cachedCommands.length})`
-        );
+      let message = `§bPage ${this.currentPage}:`;
+      if (newCommandsFound > 0) message += ` +${newCommandsFound} new`;
+      if (updatedPlaceholders > 0)
+        message += ` ~${updatedPlaceholders} updated`;
+
+      // Only show rename message if 2 or fewer renames
+      if (renamedCommands > 0 && renamedCommands <= 2)
+        message += ` ↻${renamedCommands} renamed`;
+
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedCommands.length > 0 && deletedCommands.length <= 2)
+        message += ` -${deletedCommands.length} deleted`;
+
+      message += ` (Total: ${this.cachedCommands.length})`;
+
+      if (
+        newCommandsFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedCommands > 0 && renamedCommands <= 2) ||
+        (deletedCommands.length > 0 && deletedCommands.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
         World.playSound("random.orb", 1, 2);
       }
     } else {
-      if (newCommandsFound > 0) {
-        ChatLib.chat(
-          PREFIX +
-            `§aPage ${this.currentPage} scan complete. Found ${newCommandsFound} new commands. Total: ${this.cachedCommands.length}`
-        );
+      let message = `§aPage ${this.currentPage} scan complete.`;
+      if (newCommandsFound > 0)
+        message += ` Found ${newCommandsFound} new commands.`;
+      if (updatedPlaceholders > 0)
+        message += ` Updated ${updatedPlaceholders} placeholders.`;
+
+      // Only show rename message if 2 or fewer renames
+      if (renamedCommands > 0 && renamedCommands <= 2)
+        message += ` Detected ${renamedCommands} renames.`;
+
+      // Only show deletion message if 2 or fewer deletions
+      if (deletedCommands.length > 0 && deletedCommands.length <= 2)
+        message += ` Removed ${deletedCommands.length} deleted commands.`;
+
+      message += ` Total: ${this.cachedCommands.length}`;
+
+      if (
+        newCommandsFound > 0 ||
+        updatedPlaceholders > 0 ||
+        (renamedCommands > 0 && renamedCommands <= 2) ||
+        (deletedCommands.length > 0 && deletedCommands.length <= 2)
+      ) {
+        ChatLib.chat(PREFIX + message);
       }
     }
 
@@ -534,61 +795,69 @@ class CommandsVisualCache {
     if (this.isAutoScanning || !this.isActive) return;
 
     this.isAutoScanning = true;
-    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
 
-    setTimeout(() => {
-      this.continueAutoScan();
-    }, 100);
+    // Go to first page before starting
+    const inventory = Player.getOpenedInventory();
+    const previousPageItem = inventory.getStackInSlot(45);
+
+    if (previousPageItem && previousPageItem.getName() !== "Air") {
+      inventory.click(45, false, "RIGHT");
+    }
+
+    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
+    setTimeout(() => this.continueAutoScan(), 100);
+  }
+
+  scanLastPageOnly() {
+    if (this.totalPages <= 1) {
+      this.scanCurrentPage();
+      return;
+    }
+
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) return;
+
+    const nextPageItem = inventory.getStackInSlot(53);
+    if (nextPageItem && nextPageItem.getName() !== "Air") {
+      ChatLib.chat(PREFIX + `§bGoing to last page (${this.totalPages})...`);
+      inventory.click(53, false, "RIGHT");
+
+      setTimeout(() => {
+        this.scanCurrentPage();
+      }, 500);
+    } else {
+      this.scanCurrentPage();
+    }
   }
 
   continueAutoScan() {
     if (!this.isAutoScanning) return;
 
-    if (this.scannedPages.size >= this.totalPages) {
-      ChatLib.chat(
-        PREFIX +
-          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedCommands.length} total commands.`
-      );
-      World.playSound("random.levelup", 1, 2);
-      this.isAutoScanning = false;
+    const inventory = Player.getOpenedInventory();
+    if (!inventory) {
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 200);
       return;
     }
 
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      this.stopAutoScan();
-      return;
+    if (!this.scannedPages.has(this.currentPage)) {
+      this.scanCurrentPage();
     }
 
     const nextPageItem = inventory.getStackInSlot(53);
+
+    // Left click to go to next page if it exists
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       inventory.click(53, false, "LEFT");
-
-      this.autoScanTimeout = setTimeout(() => {
-        this.continueAutoScan();
-      }, this.autoScanDelay);
-    } else {
-      if (!this.scannedPages.has(this.currentPage)) {
-        this.scanCurrentPage();
-
-        setTimeout(() => {
-          if (this.scannedPages.size >= this.totalPages) {
-            ChatLib.chat(
-              PREFIX +
-                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedCommands.length} total commands.`
-            );
-            this.isAutoScanning = false;
-          } else {
-            this.stopAutoScan();
-          }
-        }, 100);
-      } else {
-        ChatLib.chat(
-          PREFIX + `§aTotal commands loaded: ${this.cachedCommands.length}`
-        );
-        this.isAutoScanning = false;
-      }
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
+      return;
     }
+
+    ChatLib.chat(
+      PREFIX +
+        `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedCommands.length} total commands.`
+    );
+    this.isAutoScanning = false;
+    this.refreshPlaceholderCommands();
   }
 
   parseCommandItem(item, slotIndex) {
@@ -649,6 +918,7 @@ class CommandsVisualCache {
       itemId: itemId,
       itemDamage: itemDamage,
       page: this.currentPage,
+      isPlaceholder: false,
     };
   }
 
@@ -734,11 +1004,19 @@ class CommandsVisualCache {
       let currentY = panelY + 10;
 
       // Draw title
+      const placeholderCount = this.cachedCommands.filter(
+        (c) => c.isPlaceholder
+      ).length;
       const scannedInfo =
         this.totalPages === 999
           ? `(${this.scannedPages.size}/?)`
           : `(${this.scannedPages.size}/${this.totalPages})`;
-      const title = `${PREFIX}Commands (${this.cachedCommands.length}) ${scannedInfo}`;
+
+      let title = `${PREFIX}Commands (${this.cachedCommands.length}) ${scannedInfo}`;
+      if (placeholderCount > 0) {
+        title += ` §e[${placeholderCount} new]`;
+      }
+
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -761,14 +1039,12 @@ class CommandsVisualCache {
       currentY += 30;
 
       // Draw commands list
-      const listHeight = panelHeight - (currentY - panelY) - 50;
+      const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawCommandsList(panelX, currentY, panelWidth, listHeight);
 
-      // Draw auto-scan button
-      const buttonY = currentY + listHeight - 10;
+      const buttonY = currentY + listHeight + 10;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
-      // Draw instructions at bottom
       const instructions = [
         "§eCAUTION: Commands with long names might not save to Last Command!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
@@ -776,7 +1052,7 @@ class CommandsVisualCache {
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
         const instrX = panelX + (panelWidth - instrWidth) / 2;
-        const instrY = panelY + panelHeight - 25 + index * 10;
+        const instrY = panelY + panelHeight - 35 + index * 10;
         Renderer.drawStringWithShadow(instruction, instrX, instrY);
       });
     } catch (error) {
@@ -877,6 +1153,10 @@ class CommandsVisualCache {
         bgColor = 0xff555555; // Lighter for hover
       }
 
+      if (cmd.isPlaceholder) {
+        bgColor = cmd.isPlaceholder ? 0xff4a4a00 : bgColor;
+      }
+
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
       // Draw command icon
@@ -912,7 +1192,13 @@ class CommandsVisualCache {
       const availableTextWidth = listWidth - iconSize - iconMargin * 3;
 
       const nameColor =
-        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
+        i === this.selectedIndex
+          ? "§a"
+          : isHovered
+          ? "§e"
+          : cmd.isPlaceholder
+          ? "§6"
+          : "§f";
       const commandName = cmd.name || "Unknown Command";
 
       const maxChars = Math.floor(availableTextWidth / 6) - 2;
@@ -921,18 +1207,20 @@ class CommandsVisualCache {
           ? commandName.substring(0, maxChars - 3) + "..."
           : commandName;
 
+      const finalDisplayName = cmd.isPlaceholder
+        ? displayName + " §8[NEW]"
+        : displayName;
+
       if (hasDescription) {
-        // Draw name at top if there's a description
         Renderer.drawStringWithShadow(
-          nameColor + displayName,
+          nameColor + finalDisplayName,
           textStartX,
           itemY + 2
         );
       } else {
-        // Center the name vertically if there's no description
         const nameY = itemY + (itemHeight - 8) / 2;
         Renderer.drawStringWithShadow(
-          nameColor + displayName,
+          nameColor + finalDisplayName,
           textStartX,
           nameY
         );
@@ -952,7 +1240,6 @@ class CommandsVisualCache {
         );
       }
 
-      // Draw command description only if it exists
       if (hasDescription) {
         let descriptionText = "";
         if (cmd.description) {
@@ -978,7 +1265,9 @@ class CommandsVisualCache {
   drawFallbackIcon(x, y, size, cmd) {
     let color = 0xff666666;
 
-    if (cmd.name) {
+    if (cmd.isPlaceholder) {
+      color = 0xffffaa00; // Orange for new commands
+    } else if (cmd.name) {
       let hash = 0;
       for (let i = 0; i < cmd.name.length; i++) {
         hash = cmd.name.charCodeAt(i) + ((hash << 5) - hash);
@@ -1078,7 +1367,6 @@ class CommandsVisualCache {
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
-    // Check if auto-scan button was clicked
     if (
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
@@ -1108,6 +1396,7 @@ class CommandsVisualCache {
       return true;
     }
 
+    // Check if click is within panel bounds
     if (
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&
