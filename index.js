@@ -9,6 +9,9 @@ import "./commands/crud";
 import "./menus/shortcuts";
 import "./menus/regions";
 import "./menus/functions";
+import "./menus/custommenus";
+import "./menus/commands";
+
 
 import { PREFIX } from "./utils/constants";
 

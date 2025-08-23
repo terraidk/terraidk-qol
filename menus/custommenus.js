@@ -97,10 +97,10 @@ class Input {
   }
 }
 
-class RegionsVisualCache {
+class MenusVisualCache {
   constructor() {
-    this.cachedRegions = [];
-    this.filteredRegions = [];
+    this.cachedMenus = [];
+    this.filteredMenus = [];
     this.isActive = false;
     this.isScanning = false;
     this.hoveredIndex = -1;
@@ -199,7 +199,7 @@ class RegionsVisualCache {
 
       for (let i = 1; i <= 3; i++) {
         setTimeout(() => {
-          this.checkForRegionsGUI(i);
+          this.checkForMenusGUI(i);
         }, 50 * i);
       }
     });
@@ -217,7 +217,7 @@ class RegionsVisualCache {
     });
 
     register("guiRender", (mouseX, mouseY) => {
-      if (this.isActive && this.cachedRegions.length > 0) {
+      if (this.isActive && this.cachedMenus.length > 0) {
         this.renderOverlay();
       }
     });
@@ -255,10 +255,7 @@ class RegionsVisualCache {
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
-    const maxScroll = Math.max(
-      0,
-      this.filteredRegions.length - maxVisibleItems
-    );
+    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems);
 
     this.scrollOffset += direction * 1;
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
@@ -310,8 +307,8 @@ class RegionsVisualCache {
   }
 
   clearCache() {
-    this.cachedRegions = [];
-    this.filteredRegions = [];
+    this.cachedMenus = [];
+    this.filteredMenus = [];
     this.isActive = false;
     this.hoveredIndex = -1;
     this.selectedIndex = -1;
@@ -336,22 +333,22 @@ class RegionsVisualCache {
     this.restoreAllKeybinds();
   }
 
-  checkForRegionsGUI(attempt) {
+  checkForMenusGUI(attempt) {
     if (this.isActive || this.isScanning) return;
 
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
 
-    const regionsRegex = /^\(\d+\/\d+\) Regions$|^Regions$/;
+    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/;
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
 
-    if (regionsRegex.test(cleanTitle)) {
-      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
+    if (menusRegex.test(cleanTitle)) {
+      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/);
       if (pageMatch) {
         this.currentPage = parseInt(pageMatch[1]);
         this.totalPages = parseInt(pageMatch[2]);
-      } else if (cleanTitle === "Regions") {
+      } else if (cleanTitle === "Custom Menus") {
         this.currentPage = 1;
         this.totalPages = this.detectTotalPages(inventory);
       }
@@ -396,8 +393,7 @@ class RegionsVisualCache {
 
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
-
-    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/);
 
     if (pageMatch) {
       const newPage = parseInt(pageMatch[1]);
@@ -428,7 +424,7 @@ class RegionsVisualCache {
           }, this.autoScanDelay / 2);
         }
       }
-    } else if (cleanTitle === "Regions") {
+    } else if (cleanTitle === "Custom Menus") {
       if (this.currentPage !== 1) {
         this.currentPage = 1;
 
@@ -443,6 +439,7 @@ class RegionsVisualCache {
       }
     }
   }
+
   stopAutoScan() {
     if (!this.isAutoScanning) return;
 
@@ -467,43 +464,50 @@ class RegionsVisualCache {
 
     this.scannedPages.add(this.currentPage);
 
-    // The regions are in specific slots in the chest GUI
+    // The menus are in specific slots in the chest GUI
     // prettier-ignore
-    const regionSlots = [
+    const menuSlots = [
       10, 11, 12, 13, 14, 15, 16, // Row 1 
       19, 20, 21, 22, 23, 24, 25, // Row 2
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
-    let newRegionsFound = 0;
+    let newMenusFound = 0;
 
-    regionSlots.forEach((slotIndex) => {
+    menuSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
-        const regionData = this.parseRegionItem(item, slotIndex);
-        if (regionData) {
-          const existingRegion = this.cachedRegions.find(
-            (r) => r.name === regionData.name
+        const menuData = this.parseMenuitem(item, slotIndex);
+        if (menuData) {
+          const existingMenu = this.cachedMenus.find(
+            (m) => m.name === menuData.name
           );
-          if (!existingRegion) {
-            this.cachedRegions.push(regionData);
-            newRegionsFound++;
+          if (!existingMenu) {
+            this.cachedMenus.push(menuData);
+            newMenusFound++;
           }
         }
       }
     });
 
     if (this.isAutoScanning) {
-      if (newRegionsFound > 0) {
+      if (newMenusFound > 0) {
         ChatLib.chat(
           PREFIX +
-            `§bPage ${this.currentPage}: +${newRegionsFound} regions (Total: ${this.cachedRegions.length})`
+            `§bPage ${this.currentPage}: +${newMenusFound} menus (Total: ${this.cachedMenus.length})`
         );
         World.playSound("random.orb", 1, 2);
       }
+    } else {
+      if (newMenusFound > 0) {
+        ChatLib.chat(
+          PREFIX +
+            `§aPage ${this.currentPage} scan complete. Found ${newMenusFound} new menus. Total: ${this.cachedMenus.length}`
+        );
+      }
     }
 
-    this.updateFilteredRegions();
+    this.updateFilteredMenus();
 
     if (!this.isActive) {
       this.isActive = true;
@@ -512,6 +516,15 @@ class RegionsVisualCache {
     }
 
     this.isScanning = false;
+
+    if (this.scannedPages.size < this.totalPages && !this.isAutoScanning) {
+      const unscannedPages = [];
+      for (let i = 1; i <= this.totalPages; i++) {
+        if (!this.scannedPages.has(i)) {
+          unscannedPages.push(i);
+        }
+      }
+    }
   }
 
   startAutoScan() {
@@ -525,37 +538,13 @@ class RegionsVisualCache {
     }, 100);
   }
 
-  goToFirstPage() {
-    if (this.currentPage === 1) {
-      this.continueAutoScan();
-      return;
-    }
-
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      this.stopAutoScan();
-      return;
-    }
-
-    const prevPageItem = inventory.getStackInSlot(45);
-    if (prevPageItem && prevPageItem.getName() !== "Air") {
-      inventory.click(45, false, "LEFT");
-
-      this.autoScanTimeout = setTimeout(() => {
-        this.goToFirstPage();
-      }, this.autoScanDelay);
-    } else {
-      this.continueAutoScan();
-    }
-  }
-
   continueAutoScan() {
     if (!this.isAutoScanning) return;
 
     if (this.scannedPages.size >= this.totalPages) {
       ChatLib.chat(
         PREFIX +
-          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
+          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedMenus.length} total menus.`
       );
       World.playSound("random.levelup", 1, 2);
       this.isAutoScanning = false;
@@ -583,7 +572,7 @@ class RegionsVisualCache {
           if (this.scannedPages.size >= this.totalPages) {
             ChatLib.chat(
               PREFIX +
-                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
+                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedMenus.length} total menus.`
             );
             this.isAutoScanning = false;
           } else {
@@ -592,62 +581,37 @@ class RegionsVisualCache {
         }, 100);
       } else {
         ChatLib.chat(
-          PREFIX + `§aTotal regions loaded: ${this.cachedRegions.length}`
+          PREFIX + `§aTotal menus loaded: ${this.cachedMenus.length}`
         );
         this.isAutoScanning = false;
       }
     }
   }
 
-  navigateToPage(targetPage) {
-    if (targetPage === this.currentPage) {
-      if (this.isAutoScanning) {
-        this.continueAutoScan();
-      }
-      return;
-    }
-
-    this.clickNextPageButton();
-  }
-
-  clickNextPageButton() {
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      if (this.isAutoScanning) {
-        this.stopAutoScan();
-      }
-      return;
-    }
-
-    // Check if next page button exists in slot 53
-    const nextPageItem = inventory.getStackInSlot(53);
-    if (nextPageItem && nextPageItem.getName() !== "Air") {
-      inventory.click(53, false, "LEFT");
-    } else {
-      if (this.isAutoScanning) {
-        this.stopAutoScan();
-      }
-    }
-  }
-
-  parseRegionItem(item, slotIndex) {
+  parseMenuitem(item, slotIndex) {
     const itemName = item.getName();
     const cleanName = itemName.replace(/§[0-9a-fk-or]/g, "");
     const lore = item.getLore();
 
-    let fromCoords = null;
-    let toCoords = null;
-    let hasRegionData = false;
+    let descriptions = [];
+    let hasMenuData = false;
 
     lore.forEach((line) => {
       const cleanLine = line.replace(/§[0-9a-fk-or]/g, "");
 
-      if (cleanLine.startsWith("From:")) {
-        fromCoords = cleanLine.substring(5).trim();
-        hasRegionData = true;
-      } else if (cleanLine.startsWith("To:")) {
-        toCoords = cleanLine.substring(3).trim();
-        hasRegionData = true;
+      if (
+        cleanLine.trim() === "" ||
+        cleanLine.includes("Left Click") ||
+        cleanLine.includes("Right Click") ||
+        cleanLine.includes("SHIFT") ||
+        cleanLine.includes("more options")
+      ) {
+        return;
+      }
+
+      if (line.includes("§7")) {
+        descriptions.push(cleanLine.trim());
+        hasMenuData = true;
       }
     });
 
@@ -673,11 +637,11 @@ class RegionsVisualCache {
     return {
       name: cleanName,
       displayName: itemName,
-      from: fromCoords || "Unknown",
-      to: toCoords || "Unknown",
+      description: descriptions.length > 0 ? descriptions.join(" ") : null,
+      descriptions: descriptions,
       lore: lore,
       slotIndex: slotIndex,
-      hasCoords: hasRegionData,
+      hasDescription: hasMenuData,
       ctItem: ctItem,
       itemId: itemId,
       itemDamage: itemDamage,
@@ -685,34 +649,35 @@ class RegionsVisualCache {
     };
   }
 
-  updateFilteredRegions() {
+  updateFilteredMenus() {
     const filterText = this.filterTextField
       ? this.filterTextField.getText()
       : "";
 
     if (!filterText) {
-      this.filteredRegions = [...this.cachedRegions];
+      this.filteredMenus = [...this.cachedMenus];
     } else {
       const filter = filterText.toLowerCase();
-      this.filteredRegions = this.cachedRegions.filter(
-        (region) =>
-          region.name.toLowerCase().includes(filter) ||
-          (region.from && region.from.toLowerCase().includes(filter)) ||
-          (region.to && region.to.toLowerCase().includes(filter))
+      this.filteredMenus = this.cachedMenus.filter(
+        (menu) =>
+          menu.name.toLowerCase().includes(filter) ||
+          (menu.description &&
+            menu.description.toLowerCase().includes(filter)) ||
+          (menu.descriptions &&
+            menu.descriptions.some((desc) =>
+              desc.toLowerCase().includes(filter)
+            ))
       );
     }
 
-    if (this.selectedIndex >= this.filteredRegions.length) {
+    if (this.selectedIndex >= this.filteredMenus.length) {
       this.selectedIndex = -1;
     }
 
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
-    const maxScroll = Math.max(
-      0,
-      this.filteredRegions.length - maxVisibleItems
-    );
+    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems);
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
@@ -740,10 +705,11 @@ class RegionsVisualCache {
         if (this.filterTextField) {
           this.filterTextField.setText("");
           this.filterText = "";
-          this.updateFilteredRegions();
+          this.updateFilteredMenus();
         }
       }
 
+      // Draw panel with border
       Renderer.drawRect(
         0xdd000000,
         panelX - 1,
@@ -762,11 +728,12 @@ class RegionsVisualCache {
 
       let currentY = panelY + 10;
 
+      // Draw title
       const scannedInfo =
         this.totalPages === 999
           ? `(${this.scannedPages.size}/?)`
           : `(${this.scannedPages.size}/${this.totalPages})`;
-      const title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
+      const title = `${PREFIX}Custom Menus (${this.cachedMenus.length}) ${scannedInfo}`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -775,25 +742,30 @@ class RegionsVisualCache {
       );
       currentY += 20;
 
+      // Render filter text field
       if (this.filterTextField) {
         this.filterTextField.render();
+
         const currentText = this.filterTextField.getText();
         if (currentText !== this.filterText) {
           this.filterText = currentText;
-          this.updateFilteredRegions();
+          this.updateFilteredMenus();
         }
       }
 
       currentY += 30;
 
+      // Draw menus list
       const listHeight = panelHeight - (currentY - panelY) - 50;
-      this.drawRegionsList(panelX, currentY, panelWidth, listHeight);
+      this.drawMenusList(panelX, currentY, panelWidth, listHeight);
 
+      // Draw auto-scan button
       const buttonY = currentY + listHeight - 10;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
+      // Draw instructions at bottom
       const instructions = [
-        "§eCAUTION: Regions with long names might not save to Last Region!",
+        "§eCAUTION: Menus with long names might not save to Last Menu!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
       ];
       instructions.forEach((instruction, index) => {
@@ -804,6 +776,232 @@ class RegionsVisualCache {
       });
     } catch (error) {
       ChatLib.chat(PREFIX + `§c[ERROR] Rendering failed: ${error.message}`);
+    }
+  }
+
+  drawMenusList(panelX, listStartY, panelWidth, availableHeight) {
+    const itemHeight = 22;
+    const itemSpacing = 1;
+    const maxVisibleItems = Math.floor(
+      availableHeight / (itemHeight + itemSpacing)
+    );
+    const scrollbarWidth = 3;
+    const scrollbarMargin = 3;
+    const listWidth = panelWidth - 20;
+    const iconSize = 16;
+    const iconMargin = 4;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    this.hoveredIndex = -1;
+
+    const startIndex = this.scrollOffset;
+    const endIndex = Math.min(
+      startIndex + maxVisibleItems,
+      this.filteredMenus.length
+    );
+
+    const visibleItemCount = endIndex - startIndex;
+    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
+
+    // Draw scrollbar if needed
+    if (this.filteredMenus.length > maxVisibleItems) {
+      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
+      const maxScrollRange = this.filteredMenus.length - maxVisibleItems;
+      const scrollbarHeight = actualContentHeight;
+
+      Renderer.drawRect(
+        this.colors.scrollbar,
+        scrollbarX,
+        listStartY,
+        scrollbarWidth,
+        scrollbarHeight
+      );
+
+      const thumbHeight = Math.max(
+        10,
+        (maxVisibleItems / this.filteredMenus.length) * scrollbarHeight
+      );
+
+      const thumbY =
+        maxScrollRange > 0
+          ? listStartY +
+            (this.scrollOffset / maxScrollRange) *
+              (scrollbarHeight - thumbHeight)
+          : listStartY;
+
+      Renderer.drawRect(
+        this.colors.scrollbarThumb,
+        scrollbarX,
+        thumbY,
+        scrollbarWidth,
+        thumbHeight
+      );
+    }
+
+    // Draw menu items
+    for (let i = startIndex; i < endIndex; i++) {
+      const menu = this.filteredMenus[i];
+      if (!menu) continue;
+
+      const listIndex = i - startIndex;
+      const itemX = panelX + 10;
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+
+      const isHovered =
+        mouseX >= itemX &&
+        mouseX <= itemX + listWidth &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight;
+
+      if (isHovered) {
+        this.hoveredIndex = i;
+      }
+
+      let bgColor = 0xff333333;
+      if (i === this.selectedIndex) {
+        bgColor = 0xff4caf50; // Green for selected
+      } else if (isHovered) {
+        bgColor = 0xff555555; // Lighter for hover
+      }
+
+      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
+
+      // Draw menu icon
+      try {
+        if (menu.ctItem) {
+          const iconX = itemX + iconMargin;
+          const iconY = itemY + (itemHeight - iconSize) / 2;
+          menu.ctItem.draw(iconX, iconY, 1.0);
+        } else {
+          this.drawFallbackIcon(
+            itemX + iconMargin,
+            itemY + (itemHeight - iconSize) / 2,
+            iconSize,
+            menu
+          );
+        }
+      } catch (e) {
+        this.drawFallbackIcon(
+          itemX + iconMargin,
+          itemY + (itemHeight - iconSize) / 2,
+          iconSize,
+          menu
+        );
+      }
+
+      // Check if menu has description
+      const hasDescription =
+        menu.hasDescription &&
+        (menu.description ||
+          (menu.descriptions && menu.descriptions.length > 0));
+
+      // Draw menu name
+      const textStartX = itemX + iconSize + iconMargin * 2;
+      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
+
+      const nameColor =
+        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
+      const menuName = menu.name || "Unknown Menu";
+
+      const maxChars = Math.floor(availableTextWidth / 6) - 2;
+      const displayName =
+        menuName.length > maxChars
+          ? menuName.substring(0, maxChars - 3) + "..."
+          : menuName;
+
+      if (hasDescription) {
+        // Draw name at top if there's a description
+        Renderer.drawStringWithShadow(
+          nameColor + displayName,
+          textStartX,
+          itemY + 2
+        );
+      } else {
+        // Center the name vertically if there's no description
+        const nameY = itemY + (itemHeight - 8) / 2;
+        Renderer.drawStringWithShadow(
+          nameColor + displayName,
+          textStartX,
+          nameY
+        );
+      }
+
+      // Draw page number if multiple pages
+      if (this.totalPages > 1 && panelWidth > 250) {
+        const pageText = `§8[P${menu.page}]`;
+        const pageWidth = Renderer.getStringWidth(pageText);
+        const pageHeight = 8;
+        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+
+        Renderer.drawStringWithShadow(
+          pageText,
+          itemX + listWidth - pageWidth - 5,
+          pageY
+        );
+      }
+
+      // Draw menu description only if it exists
+      if (hasDescription) {
+        let descriptionText = "";
+        if (menu.description) {
+          descriptionText = menu.description;
+        } else if (menu.descriptions && menu.descriptions.length > 0) {
+          descriptionText = menu.descriptions[0];
+        }
+
+        if (descriptionText) {
+          const descText = `§7${descriptionText}`;
+          const maxDescLength = Math.floor(availableTextWidth / 6);
+          const finalDescText =
+            descText.length > maxDescLength
+              ? descText.substring(0, maxDescLength - 3) + "..."
+              : descText;
+
+          Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
+        }
+      }
+    }
+  }
+
+  drawFallbackIcon(x, y, size, menu) {
+    let color = 0xff666666;
+
+    if (menu.name) {
+      let hash = 0;
+      for (let i = 0; i < menu.name.length; i++) {
+        hash = menu.name.charCodeAt(i) + ((hash << 5) - hash);
+      }
+
+      // don't make colors too dark
+      const r = (Math.abs(hash) % 128) + 127;
+      const g = (Math.abs(hash >> 8) % 128) + 127;
+      const b = (Math.abs(hash >> 16) % 128) + 127;
+
+      color = (0xff << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    Renderer.drawRect(color, x, y, size, size);
+
+    // Draw a border
+    Renderer.drawRect(0xff000000, x, y, size, 1); // top
+    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
+    Renderer.drawRect(0xff000000, x, y, 1, size); // left
+    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
+
+    if (menu.name && menu.name.length > 0) {
+      const letter = menu.name.charAt(0).toUpperCase();
+      const letterWidth = Renderer.getStringWidth(letter);
+      const centerX = x + (size - letterWidth) / 2;
+      const centerY = y + (size - 8) / 2;
+      Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
     }
   }
 
@@ -870,225 +1068,6 @@ class RegionsVisualCache {
     };
   }
 
-  drawRegionsList(panelX, listStartY, panelWidth, availableHeight) {
-    const itemHeight = 22;
-    const itemSpacing = 1;
-    const maxVisibleItems = Math.floor(
-      availableHeight / (itemHeight + itemSpacing)
-    );
-    const scrollbarWidth = 3;
-    const scrollbarMargin = 3;
-    const listWidth = panelWidth - 20;
-    const iconSize = 16;
-    const iconMargin = 4;
-
-    let mouseX, mouseY;
-    try {
-      mouseX = Client.getMouseX();
-      mouseY = Client.getMouseY();
-    } catch (e) {
-      mouseX = 0;
-      mouseY = 0;
-    }
-
-    this.hoveredIndex = -1;
-
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(
-      startIndex + maxVisibleItems,
-      this.filteredRegions.length
-    );
-
-    const visibleItemCount = endIndex - startIndex;
-    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
-
-    if (this.filteredRegions.length > maxVisibleItems) {
-      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
-
-      const scrollbarHeight = actualContentHeight;
-
-      Renderer.drawRect(
-        this.colors.scrollbar,
-        scrollbarX,
-        listStartY,
-        scrollbarWidth,
-        scrollbarHeight
-      );
-
-      const thumbHeight = Math.max(
-        10,
-        (maxVisibleItems / this.filteredRegions.length) * scrollbarHeight
-      );
-
-      const thumbY =
-        maxScrollRange > 0
-          ? listStartY +
-            (this.scrollOffset / maxScrollRange) *
-              (scrollbarHeight - thumbHeight)
-          : listStartY;
-
-      Renderer.drawRect(
-        this.colors.scrollbarThumb,
-        scrollbarX,
-        thumbY,
-        scrollbarWidth,
-        thumbHeight
-      );
-    }
-
-    for (let i = startIndex; i < endIndex; i++) {
-      const region = this.filteredRegions[i];
-      if (!region) continue;
-
-      const listIndex = i - startIndex;
-      const itemX = panelX + 10;
-      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
-
-      const isHovered =
-        mouseX >= itemX &&
-        mouseX <= itemX + listWidth &&
-        mouseY >= itemY &&
-        mouseY <= itemY + itemHeight;
-
-      if (isHovered) {
-        this.hoveredIndex = i;
-      }
-
-      let bgColor = 0xff333333;
-      if (i === this.selectedIndex) {
-        bgColor = 0xff4caf50; // Green for selected
-      } else if (isHovered) {
-        bgColor = 0xff555555; // Lighter for hover
-      }
-
-      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
-
-      try {
-        if (region.ctItem) {
-          const iconX = itemX + iconMargin;
-          const iconY = itemY + (itemHeight - iconSize) / 2;
-
-          region.ctItem.draw(iconX, iconY, 1.0);
-        } else {
-          this.drawFallbackIcon(
-            itemX + iconMargin,
-            itemY + (itemHeight - iconSize) / 2,
-            iconSize,
-            region
-          );
-        }
-      } catch (e) {
-        this.drawFallbackIcon(
-          itemX + iconMargin,
-          itemY + (itemHeight - iconSize) / 2,
-          iconSize,
-          region
-        );
-      }
-
-      const textStartX = itemX + iconSize + iconMargin * 2;
-      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
-
-      const nameColor =
-        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
-      const regionName = region.name || "Unknown Region";
-
-      const maxChars = Math.floor(availableTextWidth / 6) - 2;
-      const displayName =
-        regionName.length > maxChars
-          ? regionName.substring(0, maxChars - 3) + "..."
-          : regionName;
-
-      Renderer.drawStringWithShadow(
-        nameColor + displayName,
-        textStartX,
-        itemY + 2
-      );
-
-      if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${region.page}]`;
-        const pageWidth = Renderer.getStringWidth(pageText);
-        const pageHeight = 8;
-
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
-
-        Renderer.drawStringWithShadow(
-          pageText,
-          itemX + listWidth - pageWidth - 5,
-          pageY
-        );
-      }
-
-      // Format coordinates
-      if (region.hasCoords && region.from && region.to) {
-        const formattedFrom = this.formatCoordinates(region.from);
-        const formattedTo = this.formatCoordinates(region.to);
-        const coordText = `§7${formattedFrom} → ${formattedTo}`;
-
-        const maxCoordLength = Math.floor(availableTextWidth / 6);
-        const finalCoordText =
-          coordText.length > maxCoordLength
-            ? coordText.substring(0, maxCoordLength - 3) + "..."
-            : coordText;
-
-        Renderer.drawStringWithShadow(finalCoordText, textStartX, itemY + 12);
-      } else {
-        Renderer.drawStringWithShadow(
-          "§8No coordinates",
-          textStartX,
-          itemY + 12
-        );
-      }
-    }
-  }
-
-  drawFallbackIcon(x, y, size, region) {
-    let color = 0xff666666;
-
-    if (region.name) {
-      let hash = 0;
-      for (let i = 0; i < region.name.length; i++) {
-        hash = region.name.charCodeAt(i) + ((hash << 5) - hash);
-      }
-
-      // don't make colors too dark
-      const r = (Math.abs(hash) % 128) + 127;
-      const g = (Math.abs(hash >> 8) % 128) + 127;
-      const b = (Math.abs(hash >> 16) % 128) + 127;
-
-      color = (0xff << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    Renderer.drawRect(color, x, y, size, size);
-
-    // Draw a border
-    Renderer.drawRect(0xff000000, x, y, size, 1); // top
-    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
-    Renderer.drawRect(0xff000000, x, y, 1, size); // left
-    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
-
-    if (region.name && region.name.length > 0) {
-      const letter = region.name.charAt(0).toUpperCase();
-      const letterWidth = Renderer.getStringWidth(letter);
-      const centerX = x + (size - letterWidth) / 2;
-      const centerY = y + (size - 8) / 2;
-      Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
-    }
-  }
-
-  formatCoordinates(coords) {
-    if (!coords || coords === "Unknown") return coords;
-
-    const clean = coords.replace(/\s/g, "").replace(/[()]/g, "");
-    const parts = clean.split(",");
-    if (parts.length === 3) {
-      return `${parts[0]}, ${parts[1]}, ${parts[2]}`;
-    }
-
-    return coords;
-  }
-
   handleMouseClick(mouseX, mouseY, button) {
     if (!this.isActive || button !== 0) return false;
 
@@ -1112,16 +1091,16 @@ class RegionsVisualCache {
     }
 
     if (this.filterTextField) {
-      this.filterTextField.mouseClicked(mouseX, mouseY, button); // Use wrapper method
+      this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
     if (
       this.hoveredIndex >= 0 &&
-      this.hoveredIndex < this.filteredRegions.length
+      this.hoveredIndex < this.filteredMenus.length
     ) {
-      const region = this.filteredRegions[this.hoveredIndex];
+      const menu = this.filteredMenus[this.hoveredIndex];
       this.selectedIndex = this.hoveredIndex;
-      this.editRegion(region);
+      this.editMenu(menu);
       return true;
     }
 
@@ -1174,9 +1153,9 @@ class RegionsVisualCache {
       // Enter
       if (
         this.selectedIndex >= 0 &&
-        this.selectedIndex < this.filteredRegions.length
+        this.selectedIndex < this.filteredMenus.length
       ) {
-        this.editRegion(this.filteredRegions[this.selectedIndex]);
+        this.editMenu(this.filteredMenus[this.selectedIndex]);
         return true;
       }
     } else if (keyCode === 57) {
@@ -1196,16 +1175,16 @@ class RegionsVisualCache {
     if (this.selectedIndex > 0) {
       this.selectedIndex--;
       this.ensureVisible();
-    } else if (this.selectedIndex === -1 && this.filteredRegions.length > 0) {
+    } else if (this.selectedIndex === -1 && this.filteredMenus.length > 0) {
       this.selectedIndex = 0;
     }
   }
 
   navigateDown() {
-    if (this.selectedIndex < this.filteredRegions.length - 1) {
+    if (this.selectedIndex < this.filteredMenus.length - 1) {
       this.selectedIndex++;
       this.ensureVisible();
-    } else if (this.selectedIndex === -1 && this.filteredRegions.length > 0) {
+    } else if (this.selectedIndex === -1 && this.filteredMenus.length > 0) {
       this.selectedIndex = 0;
     }
   }
@@ -1221,15 +1200,12 @@ class RegionsVisualCache {
       this.scrollOffset = this.selectedIndex - maxVisibleItems + 1;
     }
 
-    const maxScroll = Math.max(
-      0,
-      this.filteredRegions.length - maxVisibleItems
-    );
+    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems);
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
-  editRegion(region) {
-    ChatLib.command(`region edit ${region.name}`);
+  editMenu(menu) {
+    ChatLib.command(`menu edit ${menu.name}`);
   }
 
   hideOverlay() {
@@ -1246,5 +1222,5 @@ class RegionsVisualCache {
   }
 }
 
-const regionsVisualCache = new RegionsVisualCache();
-export { regionsVisualCache };
+const menusVisualCache = new MenusVisualCache();
+export { menusVisualCache };

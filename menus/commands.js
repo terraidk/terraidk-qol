@@ -97,10 +97,10 @@ class Input {
   }
 }
 
-class RegionsVisualCache {
+class CommandsVisualCache {
   constructor() {
-    this.cachedRegions = [];
-    this.filteredRegions = [];
+    this.cachedCommands = [];
+    this.filteredCommands = [];
     this.isActive = false;
     this.isScanning = false;
     this.hoveredIndex = -1;
@@ -199,7 +199,7 @@ class RegionsVisualCache {
 
       for (let i = 1; i <= 3; i++) {
         setTimeout(() => {
-          this.checkForRegionsGUI(i);
+          this.checkForCommandsGUI(i);
         }, 50 * i);
       }
     });
@@ -217,7 +217,7 @@ class RegionsVisualCache {
     });
 
     register("guiRender", (mouseX, mouseY) => {
-      if (this.isActive && this.cachedRegions.length > 0) {
+      if (this.isActive && this.cachedCommands.length > 0) {
         this.renderOverlay();
       }
     });
@@ -257,7 +257,7 @@ class RegionsVisualCache {
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
     const maxScroll = Math.max(
       0,
-      this.filteredRegions.length - maxVisibleItems
+      this.filteredCommands.length - maxVisibleItems
     );
 
     this.scrollOffset += direction * 1;
@@ -310,8 +310,8 @@ class RegionsVisualCache {
   }
 
   clearCache() {
-    this.cachedRegions = [];
-    this.filteredRegions = [];
+    this.cachedCommands = [];
+    this.filteredCommands = [];
     this.isActive = false;
     this.hoveredIndex = -1;
     this.selectedIndex = -1;
@@ -336,22 +336,22 @@ class RegionsVisualCache {
     this.restoreAllKeybinds();
   }
 
-  checkForRegionsGUI(attempt) {
+  checkForCommandsGUI(attempt) {
     if (this.isActive || this.isScanning) return;
 
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
 
-    const regionsRegex = /^\(\d+\/\d+\) Regions$|^Regions$/;
+    const commandsRegex = /^\(\d+\/\d+\) Commands$|^Commands$/;
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
 
-    if (regionsRegex.test(cleanTitle)) {
-      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
+    if (commandsRegex.test(cleanTitle)) {
+      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Commands$/);
       if (pageMatch) {
         this.currentPage = parseInt(pageMatch[1]);
         this.totalPages = parseInt(pageMatch[2]);
-      } else if (cleanTitle === "Regions") {
+      } else if (cleanTitle === "Commands") {
         this.currentPage = 1;
         this.totalPages = this.detectTotalPages(inventory);
       }
@@ -396,8 +396,7 @@ class RegionsVisualCache {
 
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
-
-    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Commands$/);
 
     if (pageMatch) {
       const newPage = parseInt(pageMatch[1]);
@@ -428,7 +427,7 @@ class RegionsVisualCache {
           }, this.autoScanDelay / 2);
         }
       }
-    } else if (cleanTitle === "Regions") {
+    } else if (cleanTitle === "Commands") {
       if (this.currentPage !== 1) {
         this.currentPage = 1;
 
@@ -443,6 +442,7 @@ class RegionsVisualCache {
       }
     }
   }
+
   stopAutoScan() {
     if (!this.isAutoScanning) return;
 
@@ -467,43 +467,50 @@ class RegionsVisualCache {
 
     this.scannedPages.add(this.currentPage);
 
-    // The regions are in specific slots in the chest GUI
+    // The commands are in specific slots in the chest GUI
     // prettier-ignore
-    const regionSlots = [
+    const commandSlots = [
       10, 11, 12, 13, 14, 15, 16, // Row 1 
       19, 20, 21, 22, 23, 24, 25, // Row 2
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
-    let newRegionsFound = 0;
+    let newCommandsFound = 0;
 
-    regionSlots.forEach((slotIndex) => {
+    commandSlots.forEach((slotIndex) => {
       const item = inventory.getStackInSlot(slotIndex);
       if (item && item.getName() !== "Air") {
-        const regionData = this.parseRegionItem(item, slotIndex);
-        if (regionData) {
-          const existingRegion = this.cachedRegions.find(
-            (r) => r.name === regionData.name
+        const commandData = this.parseCommandItem(item, slotIndex);
+        if (commandData) {
+          const existingCommand = this.cachedCommands.find(
+            (c) => c.name === commandData.name
           );
-          if (!existingRegion) {
-            this.cachedRegions.push(regionData);
-            newRegionsFound++;
+          if (!existingCommand) {
+            this.cachedCommands.push(commandData);
+            newCommandsFound++;
           }
         }
       }
     });
 
     if (this.isAutoScanning) {
-      if (newRegionsFound > 0) {
+      if (newCommandsFound > 0) {
         ChatLib.chat(
           PREFIX +
-            `§bPage ${this.currentPage}: +${newRegionsFound} regions (Total: ${this.cachedRegions.length})`
+            `§bPage ${this.currentPage}: +${newCommandsFound} commands (Total: ${this.cachedCommands.length})`
         );
         World.playSound("random.orb", 1, 2);
       }
+    } else {
+      if (newCommandsFound > 0) {
+        ChatLib.chat(
+          PREFIX +
+            `§aPage ${this.currentPage} scan complete. Found ${newCommandsFound} new commands. Total: ${this.cachedCommands.length}`
+        );
+      }
     }
 
-    this.updateFilteredRegions();
+    this.updateFilteredCommands();
 
     if (!this.isActive) {
       this.isActive = true;
@@ -512,6 +519,15 @@ class RegionsVisualCache {
     }
 
     this.isScanning = false;
+
+    if (this.scannedPages.size < this.totalPages && !this.isAutoScanning) {
+      const unscannedPages = [];
+      for (let i = 1; i <= this.totalPages; i++) {
+        if (!this.scannedPages.has(i)) {
+          unscannedPages.push(i);
+        }
+      }
+    }
   }
 
   startAutoScan() {
@@ -525,37 +541,13 @@ class RegionsVisualCache {
     }, 100);
   }
 
-  goToFirstPage() {
-    if (this.currentPage === 1) {
-      this.continueAutoScan();
-      return;
-    }
-
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      this.stopAutoScan();
-      return;
-    }
-
-    const prevPageItem = inventory.getStackInSlot(45);
-    if (prevPageItem && prevPageItem.getName() !== "Air") {
-      inventory.click(45, false, "LEFT");
-
-      this.autoScanTimeout = setTimeout(() => {
-        this.goToFirstPage();
-      }, this.autoScanDelay);
-    } else {
-      this.continueAutoScan();
-    }
-  }
-
   continueAutoScan() {
     if (!this.isAutoScanning) return;
 
     if (this.scannedPages.size >= this.totalPages) {
       ChatLib.chat(
         PREFIX +
-          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
+          `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedCommands.length} total commands.`
       );
       World.playSound("random.levelup", 1, 2);
       this.isAutoScanning = false;
@@ -583,7 +575,7 @@ class RegionsVisualCache {
           if (this.scannedPages.size >= this.totalPages) {
             ChatLib.chat(
               PREFIX +
-                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedRegions.length} total regions.`
+                `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedCommands.length} total commands.`
             );
             this.isAutoScanning = false;
           } else {
@@ -592,62 +584,37 @@ class RegionsVisualCache {
         }, 100);
       } else {
         ChatLib.chat(
-          PREFIX + `§aTotal regions loaded: ${this.cachedRegions.length}`
+          PREFIX + `§aTotal commands loaded: ${this.cachedCommands.length}`
         );
         this.isAutoScanning = false;
       }
     }
   }
 
-  navigateToPage(targetPage) {
-    if (targetPage === this.currentPage) {
-      if (this.isAutoScanning) {
-        this.continueAutoScan();
-      }
-      return;
-    }
-
-    this.clickNextPageButton();
-  }
-
-  clickNextPageButton() {
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) {
-      if (this.isAutoScanning) {
-        this.stopAutoScan();
-      }
-      return;
-    }
-
-    // Check if next page button exists in slot 53
-    const nextPageItem = inventory.getStackInSlot(53);
-    if (nextPageItem && nextPageItem.getName() !== "Air") {
-      inventory.click(53, false, "LEFT");
-    } else {
-      if (this.isAutoScanning) {
-        this.stopAutoScan();
-      }
-    }
-  }
-
-  parseRegionItem(item, slotIndex) {
+  parseCommandItem(item, slotIndex) {
     const itemName = item.getName();
     const cleanName = itemName.replace(/§[0-9a-fk-or]/g, "");
     const lore = item.getLore();
 
-    let fromCoords = null;
-    let toCoords = null;
-    let hasRegionData = false;
+    let descriptions = [];
+    let hasCommandData = false;
 
     lore.forEach((line) => {
       const cleanLine = line.replace(/§[0-9a-fk-or]/g, "");
 
-      if (cleanLine.startsWith("From:")) {
-        fromCoords = cleanLine.substring(5).trim();
-        hasRegionData = true;
-      } else if (cleanLine.startsWith("To:")) {
-        toCoords = cleanLine.substring(3).trim();
-        hasRegionData = true;
+      if (
+        cleanLine.trim() === "" ||
+        cleanLine.includes("Left Click") ||
+        cleanLine.includes("Right Click") ||
+        cleanLine.includes("SHIFT") ||
+        cleanLine.includes("more options")
+      ) {
+        return;
+      }
+
+      if (line.includes("§7")) {
+        descriptions.push(cleanLine.trim());
+        hasCommandData = true;
       }
     });
 
@@ -673,11 +640,11 @@ class RegionsVisualCache {
     return {
       name: cleanName,
       displayName: itemName,
-      from: fromCoords || "Unknown",
-      to: toCoords || "Unknown",
+      description: descriptions.length > 0 ? descriptions.join(" ") : null,
+      descriptions: descriptions,
       lore: lore,
       slotIndex: slotIndex,
-      hasCoords: hasRegionData,
+      hasDescription: hasCommandData,
       ctItem: ctItem,
       itemId: itemId,
       itemDamage: itemDamage,
@@ -685,24 +652,27 @@ class RegionsVisualCache {
     };
   }
 
-  updateFilteredRegions() {
+  updateFilteredCommands() {
     const filterText = this.filterTextField
       ? this.filterTextField.getText()
       : "";
 
     if (!filterText) {
-      this.filteredRegions = [...this.cachedRegions];
+      this.filteredCommands = [...this.cachedCommands];
     } else {
       const filter = filterText.toLowerCase();
-      this.filteredRegions = this.cachedRegions.filter(
-        (region) =>
-          region.name.toLowerCase().includes(filter) ||
-          (region.from && region.from.toLowerCase().includes(filter)) ||
-          (region.to && region.to.toLowerCase().includes(filter))
+      this.filteredCommands = this.cachedCommands.filter(
+        (cmd) =>
+          cmd.name.toLowerCase().includes(filter) ||
+          (cmd.description && cmd.description.toLowerCase().includes(filter)) ||
+          (cmd.descriptions &&
+            cmd.descriptions.some((desc) =>
+              desc.toLowerCase().includes(filter)
+            ))
       );
     }
 
-    if (this.selectedIndex >= this.filteredRegions.length) {
+    if (this.selectedIndex >= this.filteredCommands.length) {
       this.selectedIndex = -1;
     }
 
@@ -711,7 +681,7 @@ class RegionsVisualCache {
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
     const maxScroll = Math.max(
       0,
-      this.filteredRegions.length - maxVisibleItems
+      this.filteredCommands.length - maxVisibleItems
     );
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
@@ -740,10 +710,11 @@ class RegionsVisualCache {
         if (this.filterTextField) {
           this.filterTextField.setText("");
           this.filterText = "";
-          this.updateFilteredRegions();
+          this.updateFilteredCommands();
         }
       }
 
+      // Draw panel with border
       Renderer.drawRect(
         0xdd000000,
         panelX - 1,
@@ -762,11 +733,12 @@ class RegionsVisualCache {
 
       let currentY = panelY + 10;
 
+      // Draw title
       const scannedInfo =
         this.totalPages === 999
           ? `(${this.scannedPages.size}/?)`
           : `(${this.scannedPages.size}/${this.totalPages})`;
-      const title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
+      const title = `${PREFIX}Commands (${this.cachedCommands.length}) ${scannedInfo}`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -775,25 +747,30 @@ class RegionsVisualCache {
       );
       currentY += 20;
 
+      // Render filter text field
       if (this.filterTextField) {
         this.filterTextField.render();
+
         const currentText = this.filterTextField.getText();
         if (currentText !== this.filterText) {
           this.filterText = currentText;
-          this.updateFilteredRegions();
+          this.updateFilteredCommands();
         }
       }
 
       currentY += 30;
 
+      // Draw commands list
       const listHeight = panelHeight - (currentY - panelY) - 50;
-      this.drawRegionsList(panelX, currentY, panelWidth, listHeight);
+      this.drawCommandsList(panelX, currentY, panelWidth, listHeight);
 
+      // Draw auto-scan button
       const buttonY = currentY + listHeight - 10;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
+      // Draw instructions at bottom
       const instructions = [
-        "§eCAUTION: Regions with long names might not save to Last Region!",
+        "§eCAUTION: Commands with long names might not save to Last Command!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
       ];
       instructions.forEach((instruction, index) => {
@@ -804,6 +781,231 @@ class RegionsVisualCache {
       });
     } catch (error) {
       ChatLib.chat(PREFIX + `§c[ERROR] Rendering failed: ${error.message}`);
+    }
+  }
+
+  drawCommandsList(panelX, listStartY, panelWidth, availableHeight) {
+    const itemHeight = 22;
+    const itemSpacing = 1;
+    const maxVisibleItems = Math.floor(
+      availableHeight / (itemHeight + itemSpacing)
+    );
+    const scrollbarWidth = 3;
+    const scrollbarMargin = 3;
+    const listWidth = panelWidth - 20;
+    const iconSize = 16;
+    const iconMargin = 4;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    this.hoveredIndex = -1;
+
+    const startIndex = this.scrollOffset;
+    const endIndex = Math.min(
+      startIndex + maxVisibleItems,
+      this.filteredCommands.length
+    );
+
+    const visibleItemCount = endIndex - startIndex;
+    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
+
+    // Draw scrollbar if needed
+    if (this.filteredCommands.length > maxVisibleItems) {
+      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
+      const maxScrollRange = this.filteredCommands.length - maxVisibleItems;
+      const scrollbarHeight = actualContentHeight;
+
+      Renderer.drawRect(
+        this.colors.scrollbar,
+        scrollbarX,
+        listStartY,
+        scrollbarWidth,
+        scrollbarHeight
+      );
+
+      const thumbHeight = Math.max(
+        10,
+        (maxVisibleItems / this.filteredCommands.length) * scrollbarHeight
+      );
+
+      const thumbY =
+        maxScrollRange > 0
+          ? listStartY +
+            (this.scrollOffset / maxScrollRange) *
+              (scrollbarHeight - thumbHeight)
+          : listStartY;
+
+      Renderer.drawRect(
+        this.colors.scrollbarThumb,
+        scrollbarX,
+        thumbY,
+        scrollbarWidth,
+        thumbHeight
+      );
+    }
+
+    // Draw command items
+    for (let i = startIndex; i < endIndex; i++) {
+      const cmd = this.filteredCommands[i];
+      if (!cmd) continue;
+
+      const listIndex = i - startIndex;
+      const itemX = panelX + 10;
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+
+      const isHovered =
+        mouseX >= itemX &&
+        mouseX <= itemX + listWidth &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight;
+
+      if (isHovered) {
+        this.hoveredIndex = i;
+      }
+
+      let bgColor = 0xff333333;
+      if (i === this.selectedIndex) {
+        bgColor = 0xff4caf50; // Green for selected
+      } else if (isHovered) {
+        bgColor = 0xff555555; // Lighter for hover
+      }
+
+      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
+
+      // Draw command icon
+      try {
+        if (cmd.ctItem) {
+          const iconX = itemX + iconMargin;
+          const iconY = itemY + (itemHeight - iconSize) / 2;
+          cmd.ctItem.draw(iconX, iconY, 1.0);
+        } else {
+          this.drawFallbackIcon(
+            itemX + iconMargin,
+            itemY + (itemHeight - iconSize) / 2,
+            iconSize,
+            cmd
+          );
+        }
+      } catch (e) {
+        this.drawFallbackIcon(
+          itemX + iconMargin,
+          itemY + (itemHeight - iconSize) / 2,
+          iconSize,
+          cmd
+        );
+      }
+
+      // Check if command has description
+      const hasDescription =
+        cmd.hasDescription &&
+        (cmd.description || (cmd.descriptions && cmd.descriptions.length > 0));
+
+      // Draw command name
+      const textStartX = itemX + iconSize + iconMargin * 2;
+      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
+
+      const nameColor =
+        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
+      const commandName = cmd.name || "Unknown Command";
+
+      const maxChars = Math.floor(availableTextWidth / 6) - 2;
+      const displayName =
+        commandName.length > maxChars
+          ? commandName.substring(0, maxChars - 3) + "..."
+          : commandName;
+
+      if (hasDescription) {
+        // Draw name at top if there's a description
+        Renderer.drawStringWithShadow(
+          nameColor + displayName,
+          textStartX,
+          itemY + 2
+        );
+      } else {
+        // Center the name vertically if there's no description
+        const nameY = itemY + (itemHeight - 8) / 2;
+        Renderer.drawStringWithShadow(
+          nameColor + displayName,
+          textStartX,
+          nameY
+        );
+      }
+
+      // Draw page number if multiple pages
+      if (this.totalPages > 1 && panelWidth > 250) {
+        const pageText = `§8[P${cmd.page}]`;
+        const pageWidth = Renderer.getStringWidth(pageText);
+        const pageHeight = 8;
+        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+
+        Renderer.drawStringWithShadow(
+          pageText,
+          itemX + listWidth - pageWidth - 5,
+          pageY
+        );
+      }
+
+      // Draw command description only if it exists
+      if (hasDescription) {
+        let descriptionText = "";
+        if (cmd.description) {
+          descriptionText = cmd.description;
+        } else if (cmd.descriptions && cmd.descriptions.length > 0) {
+          descriptionText = cmd.descriptions[0];
+        }
+
+        if (descriptionText) {
+          const descText = `§7${descriptionText}`;
+          const maxDescLength = Math.floor(availableTextWidth / 6);
+          const finalDescText =
+            descText.length > maxDescLength
+              ? descText.substring(0, maxDescLength - 3) + "..."
+              : descText;
+
+          Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
+        }
+      }
+    }
+  }
+
+  drawFallbackIcon(x, y, size, cmd) {
+    let color = 0xff666666;
+
+    if (cmd.name) {
+      let hash = 0;
+      for (let i = 0; i < cmd.name.length; i++) {
+        hash = cmd.name.charCodeAt(i) + ((hash << 5) - hash);
+      }
+
+      // don't make colors too dark
+      const r = (Math.abs(hash) % 128) + 127;
+      const g = (Math.abs(hash >> 8) % 128) + 127;
+      const b = (Math.abs(hash >> 16) % 128) + 127;
+
+      color = (0xff << 24) | (r << 16) | (g << 8) | b;
+    }
+
+    Renderer.drawRect(color, x, y, size, size);
+
+    // Draw a border
+    Renderer.drawRect(0xff000000, x, y, size, 1); // top
+    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
+    Renderer.drawRect(0xff000000, x, y, 1, size); // left
+    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
+
+    if (cmd.name && cmd.name.length > 0) {
+      const letter = cmd.name.charAt(0).toUpperCase();
+      const letterWidth = Renderer.getStringWidth(letter);
+      const centerX = x + (size - letterWidth) / 2;
+      const centerY = y + (size - 8) / 2;
+      Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
     }
   }
 
@@ -870,225 +1072,6 @@ class RegionsVisualCache {
     };
   }
 
-  drawRegionsList(panelX, listStartY, panelWidth, availableHeight) {
-    const itemHeight = 22;
-    const itemSpacing = 1;
-    const maxVisibleItems = Math.floor(
-      availableHeight / (itemHeight + itemSpacing)
-    );
-    const scrollbarWidth = 3;
-    const scrollbarMargin = 3;
-    const listWidth = panelWidth - 20;
-    const iconSize = 16;
-    const iconMargin = 4;
-
-    let mouseX, mouseY;
-    try {
-      mouseX = Client.getMouseX();
-      mouseY = Client.getMouseY();
-    } catch (e) {
-      mouseX = 0;
-      mouseY = 0;
-    }
-
-    this.hoveredIndex = -1;
-
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(
-      startIndex + maxVisibleItems,
-      this.filteredRegions.length
-    );
-
-    const visibleItemCount = endIndex - startIndex;
-    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
-
-    if (this.filteredRegions.length > maxVisibleItems) {
-      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
-
-      const scrollbarHeight = actualContentHeight;
-
-      Renderer.drawRect(
-        this.colors.scrollbar,
-        scrollbarX,
-        listStartY,
-        scrollbarWidth,
-        scrollbarHeight
-      );
-
-      const thumbHeight = Math.max(
-        10,
-        (maxVisibleItems / this.filteredRegions.length) * scrollbarHeight
-      );
-
-      const thumbY =
-        maxScrollRange > 0
-          ? listStartY +
-            (this.scrollOffset / maxScrollRange) *
-              (scrollbarHeight - thumbHeight)
-          : listStartY;
-
-      Renderer.drawRect(
-        this.colors.scrollbarThumb,
-        scrollbarX,
-        thumbY,
-        scrollbarWidth,
-        thumbHeight
-      );
-    }
-
-    for (let i = startIndex; i < endIndex; i++) {
-      const region = this.filteredRegions[i];
-      if (!region) continue;
-
-      const listIndex = i - startIndex;
-      const itemX = panelX + 10;
-      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
-
-      const isHovered =
-        mouseX >= itemX &&
-        mouseX <= itemX + listWidth &&
-        mouseY >= itemY &&
-        mouseY <= itemY + itemHeight;
-
-      if (isHovered) {
-        this.hoveredIndex = i;
-      }
-
-      let bgColor = 0xff333333;
-      if (i === this.selectedIndex) {
-        bgColor = 0xff4caf50; // Green for selected
-      } else if (isHovered) {
-        bgColor = 0xff555555; // Lighter for hover
-      }
-
-      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
-
-      try {
-        if (region.ctItem) {
-          const iconX = itemX + iconMargin;
-          const iconY = itemY + (itemHeight - iconSize) / 2;
-
-          region.ctItem.draw(iconX, iconY, 1.0);
-        } else {
-          this.drawFallbackIcon(
-            itemX + iconMargin,
-            itemY + (itemHeight - iconSize) / 2,
-            iconSize,
-            region
-          );
-        }
-      } catch (e) {
-        this.drawFallbackIcon(
-          itemX + iconMargin,
-          itemY + (itemHeight - iconSize) / 2,
-          iconSize,
-          region
-        );
-      }
-
-      const textStartX = itemX + iconSize + iconMargin * 2;
-      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
-
-      const nameColor =
-        i === this.selectedIndex ? "§a" : isHovered ? "§e" : "§f";
-      const regionName = region.name || "Unknown Region";
-
-      const maxChars = Math.floor(availableTextWidth / 6) - 2;
-      const displayName =
-        regionName.length > maxChars
-          ? regionName.substring(0, maxChars - 3) + "..."
-          : regionName;
-
-      Renderer.drawStringWithShadow(
-        nameColor + displayName,
-        textStartX,
-        itemY + 2
-      );
-
-      if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${region.page}]`;
-        const pageWidth = Renderer.getStringWidth(pageText);
-        const pageHeight = 8;
-
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
-
-        Renderer.drawStringWithShadow(
-          pageText,
-          itemX + listWidth - pageWidth - 5,
-          pageY
-        );
-      }
-
-      // Format coordinates
-      if (region.hasCoords && region.from && region.to) {
-        const formattedFrom = this.formatCoordinates(region.from);
-        const formattedTo = this.formatCoordinates(region.to);
-        const coordText = `§7${formattedFrom} → ${formattedTo}`;
-
-        const maxCoordLength = Math.floor(availableTextWidth / 6);
-        const finalCoordText =
-          coordText.length > maxCoordLength
-            ? coordText.substring(0, maxCoordLength - 3) + "..."
-            : coordText;
-
-        Renderer.drawStringWithShadow(finalCoordText, textStartX, itemY + 12);
-      } else {
-        Renderer.drawStringWithShadow(
-          "§8No coordinates",
-          textStartX,
-          itemY + 12
-        );
-      }
-    }
-  }
-
-  drawFallbackIcon(x, y, size, region) {
-    let color = 0xff666666;
-
-    if (region.name) {
-      let hash = 0;
-      for (let i = 0; i < region.name.length; i++) {
-        hash = region.name.charCodeAt(i) + ((hash << 5) - hash);
-      }
-
-      // don't make colors too dark
-      const r = (Math.abs(hash) % 128) + 127;
-      const g = (Math.abs(hash >> 8) % 128) + 127;
-      const b = (Math.abs(hash >> 16) % 128) + 127;
-
-      color = (0xff << 24) | (r << 16) | (g << 8) | b;
-    }
-
-    Renderer.drawRect(color, x, y, size, size);
-
-    // Draw a border
-    Renderer.drawRect(0xff000000, x, y, size, 1); // top
-    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
-    Renderer.drawRect(0xff000000, x, y, 1, size); // left
-    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
-
-    if (region.name && region.name.length > 0) {
-      const letter = region.name.charAt(0).toUpperCase();
-      const letterWidth = Renderer.getStringWidth(letter);
-      const centerX = x + (size - letterWidth) / 2;
-      const centerY = y + (size - 8) / 2;
-      Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
-    }
-  }
-
-  formatCoordinates(coords) {
-    if (!coords || coords === "Unknown") return coords;
-
-    const clean = coords.replace(/\s/g, "").replace(/[()]/g, "");
-    const parts = clean.split(",");
-    if (parts.length === 3) {
-      return `${parts[0]}, ${parts[1]}, ${parts[2]}`;
-    }
-
-    return coords;
-  }
-
   handleMouseClick(mouseX, mouseY, button) {
     if (!this.isActive || button !== 0) return false;
 
@@ -1112,16 +1095,16 @@ class RegionsVisualCache {
     }
 
     if (this.filterTextField) {
-      this.filterTextField.mouseClicked(mouseX, mouseY, button); // Use wrapper method
+      this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
     if (
       this.hoveredIndex >= 0 &&
-      this.hoveredIndex < this.filteredRegions.length
+      this.hoveredIndex < this.filteredCommands.length
     ) {
-      const region = this.filteredRegions[this.hoveredIndex];
+      const cmd = this.filteredCommands[this.hoveredIndex];
       this.selectedIndex = this.hoveredIndex;
-      this.editRegion(region);
+      this.editCommand(cmd);
       return true;
     }
 
@@ -1174,9 +1157,9 @@ class RegionsVisualCache {
       // Enter
       if (
         this.selectedIndex >= 0 &&
-        this.selectedIndex < this.filteredRegions.length
+        this.selectedIndex < this.filteredCommands.length
       ) {
-        this.editRegion(this.filteredRegions[this.selectedIndex]);
+        this.editCommand(this.filteredCommands[this.selectedIndex]);
         return true;
       }
     } else if (keyCode === 57) {
@@ -1196,16 +1179,16 @@ class RegionsVisualCache {
     if (this.selectedIndex > 0) {
       this.selectedIndex--;
       this.ensureVisible();
-    } else if (this.selectedIndex === -1 && this.filteredRegions.length > 0) {
+    } else if (this.selectedIndex === -1 && this.filteredCommands.length > 0) {
       this.selectedIndex = 0;
     }
   }
 
   navigateDown() {
-    if (this.selectedIndex < this.filteredRegions.length - 1) {
+    if (this.selectedIndex < this.filteredCommands.length - 1) {
       this.selectedIndex++;
       this.ensureVisible();
-    } else if (this.selectedIndex === -1 && this.filteredRegions.length > 0) {
+    } else if (this.selectedIndex === -1 && this.filteredCommands.length > 0) {
       this.selectedIndex = 0;
     }
   }
@@ -1223,13 +1206,13 @@ class RegionsVisualCache {
 
     const maxScroll = Math.max(
       0,
-      this.filteredRegions.length - maxVisibleItems
+      this.filteredCommands.length - maxVisibleItems
     );
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
-  editRegion(region) {
-    ChatLib.command(`region edit ${region.name}`);
+  editCommand(cmd) {
+    ChatLib.command(`command actions ${cmd.name}`);
   }
 
   hideOverlay() {
@@ -1246,5 +1229,5 @@ class RegionsVisualCache {
   }
 }
 
-const regionsVisualCache = new RegionsVisualCache();
-export { regionsVisualCache };
+const commandsVisualCache = new CommandsVisualCache();
+export { commandsVisualCache };
