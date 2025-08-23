@@ -636,7 +636,7 @@ class FunctionsVisualCache {
     );
   }
 
-scanCurrentPage() {
+  scanCurrentPage() {
     const inventory = Player.getOpenedInventory();
     if (!inventory) {
       this.isScanning = false;
@@ -727,15 +727,15 @@ scanCurrentPage() {
       if (newFunctionsFound > 0) message += ` +${newFunctionsFound} new`;
       if (updatedPlaceholders > 0)
         message += ` ~${updatedPlaceholders} updated`;
-      
+
       // Only show rename message if 2 or fewer renames
-      if (renamedFunctions > 0 && renamedFunctions <= 2) 
+      if (renamedFunctions > 0 && renamedFunctions <= 2)
         message += ` ↻${renamedFunctions} renamed`;
-      
+
       // Only show deletion message if 2 or fewer deletions
       if (deletedFunctions.length > 0 && deletedFunctions.length <= 2)
         message += ` -${deletedFunctions.length} deleted`;
-        
+
       message += ` (Total: ${this.cachedFunctions.length})`;
 
       if (
@@ -753,15 +753,15 @@ scanCurrentPage() {
         message += ` Found ${newFunctionsFound} new functions.`;
       if (updatedPlaceholders > 0)
         message += ` Updated ${updatedPlaceholders} placeholders.`;
-      
+
       // Only show rename message if 2 or fewer renames
       if (renamedFunctions > 0 && renamedFunctions <= 2)
         message += ` Detected ${renamedFunctions} renames.`;
-      
+
       // Only show deletion message if 2 or fewer deletions
       if (deletedFunctions.length > 0 && deletedFunctions.length <= 2)
         message += ` Removed ${deletedFunctions.length} deleted functions.`;
-        
+
       message += ` Total: ${this.cachedFunctions.length}`;
 
       if (
