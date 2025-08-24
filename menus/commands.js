@@ -12,6 +12,9 @@ if (typeof Player === "undefined") {
 if (typeof GuiTextField === "undefined") {
   var GuiTextField = Java.type("net.minecraft.client.gui.GuiTextField");
 }
+const C01PacketChatMessage = Java.type(
+  "net.minecraft.network.play.client.C01PacketChatMessage"
+);
 
 class Input {
   constructor(x, y, width, height) {
@@ -862,7 +865,12 @@ class CommandsVisualCache {
 
   parseCommandItem(item, slotIndex) {
     const itemName = item.getName();
-    const cleanName = itemName.replace(/§[0-9a-fk-or]/g, "");
+    let cleanName = itemName.replace(/§[0-9a-fk-or]/g, "");
+
+    if (cleanName.startsWith("/")) {
+      cleanName = cleanName.substring(1);
+    }
+
     const lore = item.getLore();
 
     let descriptions = [];
