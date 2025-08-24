@@ -128,6 +128,21 @@ class RegionsVisualCache {
     this.isInRegionEditGUI = false;
     this.regionEditGUITimeout = null;
 
+    this.dropdown = {
+      isVisible: false,
+      region: null,
+      x: 0,
+      y: 0,
+      width: 30,
+      height: 0,
+      hoveredOption: -1,
+      deleteConfirmationActive: false,
+      options: [
+        { text: "Edit", action: "edit", color: "§e" },
+        { text: "Delete", action: "delete", color: "§c" },
+      ],
+    };
+
     this.colors = {
       panelBg: 0xe0000000,
       panelBorder: 0xff333333,
@@ -145,6 +160,11 @@ class RegionsVisualCache {
       scanButton: 0xff2196f3,
       scanButtonHover: 0xff1976d2,
       scanButtonActive: 0xff0d47a1,
+      dropdownBg: 0xf0222222,
+      dropdownBorder: 0xff666666,
+      dropdownHover: 0xff555555,
+      deleteConfirmation: 0xff660000,
+      deleteConfirmationHover: 0xff880000,
     };
 
     this.registerEvents();
@@ -180,6 +200,172 @@ class RegionsVisualCache {
     if (this.keybindBlocker) {
       this.keybindBlocker.unregister();
       this.keybindBlocker = null;
+    }
+  }
+
+  showDropdown(region, mouseX, mouseY) {
+    this.dropdown.isVisible = true;
+    this.dropdown.region = region;
+    this.dropdown.hoveredOption = -1;
+    this.dropdown.deleteConfirmationActive = false;
+
+    const itemHeight = 20;
+    this.dropdown.height = this.dropdown.options.length * itemHeight;
+
+    let maxWidth = 80;
+    this.dropdown.options.forEach((option) => {
+      const textWidth = Renderer.getStringWidth(option.text) + 16;
+      maxWidth = Math.max(maxWidth, textWidth);
+    });
+
+    const confirmTextWidth = Renderer.getStringWidth("CONFIRM") + 16;
+    maxWidth = Math.min(maxWidth, confirmTextWidth);
+
+    this.dropdown.width = maxWidth;
+
+    const screenWidth = Renderer.screen.getWidth();
+    const screenHeight = Renderer.screen.getHeight();
+
+    this.dropdown.x = Math.min(mouseX, screenWidth - this.dropdown.width - 10);
+    this.dropdown.y = Math.min(
+      mouseY,
+      screenHeight - this.dropdown.height - 10
+    );
+
+    this.dropdown.x = Math.max(10, this.dropdown.x);
+    this.dropdown.y = Math.max(10, this.dropdown.y);
+  }
+
+  hideDropdown() {
+    this.dropdown.isVisible = false;
+    this.dropdown.region = null;
+    this.dropdown.hoveredOption = -1;
+    this.dropdown.deleteConfirmationActive = false;
+  }
+
+  renderDropdown() {
+    if (!this.dropdown.isVisible || !this.dropdown.region) return;
+
+    const { x, y, width, height } = this.dropdown;
+    const itemHeight = 20;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    Renderer.drawRect(0xff000000, x - 1, y - 1, width + 2, height + 2);
+    Renderer.drawRect(this.colors.dropdownBg, x, y, width, height);
+
+    this.dropdown.hoveredOption = -1;
+
+    this.dropdown.options.forEach((option, index) => {
+      const itemY = y + index * itemHeight;
+
+      const isHovered =
+        mouseX >= x &&
+        mouseX <= x + width &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight;
+
+      if (isHovered) {
+        this.dropdown.hoveredOption = index;
+      }
+
+      let backgroundColor = this.colors.dropdownHover;
+      let optionText = option.text;
+      let textColor = option.color;
+
+      if (option.action === "delete") {
+        if (this.dropdown.deleteConfirmationActive) {
+          optionText = "CONFIRM";
+          textColor = "§c§l";
+          backgroundColor = isHovered
+            ? this.colors.deleteConfirmationHover
+            : this.colors.deleteConfirmation;
+        } else {
+          backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+        }
+      } else {
+        backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+      }
+
+      if (backgroundColor !== 0x00000000) {
+        Renderer.drawRect(backgroundColor, x, itemY, width, itemHeight);
+      }
+
+      const textX = x + 8;
+      const textY = itemY + (itemHeight - 8) / 2;
+      Renderer.drawStringWithShadow(textColor + optionText, textX, textY);
+    });
+
+    const headerText = `§7${this.dropdown.region.name}`;
+    const headerWidth = Renderer.getStringWidth(headerText);
+    if (headerWidth <= width - 16) {
+      Renderer.drawStringWithShadow(
+        headerText,
+        x + (width - headerWidth) / 2,
+        y - 12
+      );
+    }
+  }
+
+  handleDropdownClick(mouseX, mouseY) {
+    if (!this.dropdown.isVisible) return false;
+
+    const { x, y, width, height } = this.dropdown;
+
+    if (
+      mouseX >= x &&
+      mouseX <= x + width &&
+      mouseY >= y &&
+      mouseY <= y + height
+    ) {
+      if (this.dropdown.hoveredOption >= 0) {
+        const option = this.dropdown.options[this.dropdown.hoveredOption];
+        const region = this.dropdown.region;
+
+        if (option.action === "delete") {
+          if (this.dropdown.deleteConfirmationActive) {
+            ChatLib.chat(PREFIX + `§cDeleting region: ${region.name}`);
+            ChatLib.command(`region delete ${region.name}`);
+            this.hideDropdown();
+
+            setTimeout(() => {
+              ChatLib.command("regions");
+            }, 50);
+
+            return true;
+          } else {
+            this.dropdown.deleteConfirmationActive = true;
+            return true;
+          }
+        } else {
+          this.executeDropdownAction(option.action, region);
+          this.hideDropdown();
+          return true;
+        }
+      }
+    }
+
+    this.hideDropdown();
+    return false;
+  }
+
+  executeDropdownAction(action, region) {
+    switch (action) {
+      case "edit":
+        ChatLib.command(`region edit ${region.name}`);
+        break;
+      case "delete":
+        ChatLib.command(`region delete ${region.name}`);
+        break;
+      default:
+        ChatLib.chat(PREFIX + `§cUnknown action: ${action}`);
     }
   }
 
@@ -366,7 +552,6 @@ class RegionsVisualCache {
         PREFIX + `§6Renamed region "${oldName}" → "${newName}" in cache`
       );
     } else {
-      // If we don't have the old region, create a placeholder for the new one
       this.handleRegionCreated(newName);
       ChatLib.chat(
         PREFIX +
@@ -395,7 +580,6 @@ class RegionsVisualCache {
 
     if (!regionsRegex.test(cleanTitle)) return;
 
-    // Get current page number
     const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Regions$/);
     const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
 
@@ -414,7 +598,6 @@ class RegionsVisualCache {
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
 
-    // Only validate if we're in the regions GUI
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
     const regionsRegex = /^\(\d+\/\d+\) Regions$|^Regions$/;
@@ -448,6 +631,10 @@ class RegionsVisualCache {
   }
 
   handleMouseScroll(direction) {
+    if (this.dropdown.isVisible) {
+      this.hideDropdown();
+    }
+
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
@@ -702,7 +889,6 @@ class RegionsVisualCache {
             );
 
             if (possibleRename) {
-              // Only show individual rename message if 2 or fewer total renames expected
               if (renamedRegions < 2) {
                 ChatLib.chat(
                   PREFIX +
@@ -736,7 +922,6 @@ class RegionsVisualCache {
 
     if (deletedRegions.length > 0) {
       deletedRegions.forEach((region) => {
-        // Only show individual deletion message if 2 or fewer deletions
         if (deletedRegions.length <= 2) {
           ChatLib.chat(PREFIX + `§cDeleted region detected: "${region.name}"`);
         }
@@ -753,11 +938,9 @@ class RegionsVisualCache {
       if (updatedPlaceholders > 0)
         message += ` ~${updatedPlaceholders} updated`;
 
-      // Only show rename message if 2 or fewer renames
       if (renamedRegions > 0 && renamedRegions <= 2)
         message += ` ↻${renamedRegions} renamed`;
 
-      // Only show deletion message if 2 or fewer deletions
       if (deletedRegions.length > 0 && deletedRegions.length <= 2)
         message += ` -${deletedRegions.length} deleted`;
 
@@ -779,11 +962,9 @@ class RegionsVisualCache {
       if (updatedPlaceholders > 0)
         message += ` Updated ${updatedPlaceholders} placeholders.`;
 
-      // Only show rename message if 2 or fewer renames
       if (renamedRegions > 0 && renamedRegions <= 2)
         message += ` Detected ${renamedRegions} renames.`;
 
-      // Only show deletion message if 2 or fewer deletions
       if (deletedRegions.length > 0 && deletedRegions.length <= 2)
         message += ` Removed ${deletedRegions.length} deleted regions.`;
 
@@ -871,7 +1052,6 @@ class RegionsVisualCache {
 
     const nextPageItem = inventory.getStackInSlot(53);
 
-    // left click to go to next page if it exists
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       inventory.click(53, false, "LEFT");
       this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
@@ -1001,7 +1181,6 @@ class RegionsVisualCache {
         }
       }
 
-      // Draw panel with border
       Renderer.drawRect(
         0xdd000000,
         panelX - 1,
@@ -1020,7 +1199,6 @@ class RegionsVisualCache {
 
       let currentY = panelY + 10;
 
-      // Draw title
       const placeholderCount = this.cachedRegions.filter(
         (r) => r.isPlaceholder
       ).length;
@@ -1042,7 +1220,6 @@ class RegionsVisualCache {
       );
       currentY += 20;
 
-      // Render filter text field
       if (this.filterTextField) {
         this.filterTextField.render();
 
@@ -1055,7 +1232,6 @@ class RegionsVisualCache {
 
       currentY += 30;
 
-      // Draw regions list
       const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawRegionsList(panelX, currentY, panelWidth, listHeight);
 
@@ -1063,6 +1239,7 @@ class RegionsVisualCache {
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
       const instructions = [
+        "§7Left click to edit • Right click for more options",
         "§eCAUTION: Regions with long names might not save to Last Region!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
       ];
@@ -1072,6 +1249,8 @@ class RegionsVisualCache {
         const instrY = panelY + panelHeight - 35 + index * 10;
         Renderer.drawStringWithShadow(instruction, instrX, instrY);
       });
+
+      this.renderDropdown();
     } catch (error) {
       ChatLib.chat(PREFIX + `§c[ERROR] Rendering failed: ${error.message}`);
     }
@@ -1399,12 +1578,17 @@ class RegionsVisualCache {
   }
 
   handleMouseClick(mouseX, mouseY, button) {
-    if (!this.isActive || button !== 0) return false;
+    if (!this.isActive) return false;
 
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
+    if (this.dropdown.isVisible) {
+      return this.handleDropdownClick(mouseX, mouseY);
+    }
+
     if (
+      button === 0 &&
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
       mouseX <= this.autoScanButton.x + this.autoScanButton.width &&
@@ -1419,7 +1603,7 @@ class RegionsVisualCache {
       return true;
     }
 
-    if (this.filterTextField) {
+    if (this.filterTextField && button === 0) {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -1429,11 +1613,16 @@ class RegionsVisualCache {
     ) {
       const region = this.filteredRegions[this.hoveredIndex];
       this.selectedIndex = this.hoveredIndex;
-      this.editRegion(region);
-      return true;
+
+      if (button === 0) {
+        this.editRegion(region);
+        return true;
+      } else if (button === 1) {
+        this.showDropdown(region, mouseX, mouseY);
+        return true;
+      }
     }
 
-    // Check if click is within panel bounds
     if (
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&
@@ -1447,6 +1636,51 @@ class RegionsVisualCache {
   }
 
   handleKeyPress(keyCode, char) {
+    // Handle dropdown key presses
+    if (this.dropdown.isVisible) {
+      if (keyCode === 1) {
+        // ESC - close dropdown
+        this.hideDropdown();
+        return true;
+      } else if (keyCode === 200) {
+        // Up arrow - navigate dropdown up
+        if (this.dropdown.hoveredOption > 0) {
+          this.dropdown.hoveredOption--;
+        } else {
+          this.dropdown.hoveredOption = this.dropdown.options.length - 1;
+        }
+        return true;
+      } else if (keyCode === 208) {
+        // Down arrow - navigate dropdown down
+        if (this.dropdown.hoveredOption < this.dropdown.options.length - 1) {
+          this.dropdown.hoveredOption++;
+        } else {
+          this.dropdown.hoveredOption = 0;
+        }
+        return true;
+      } else if (keyCode === 28) {
+        // Enter - execute dropdown option
+        if (this.dropdown.hoveredOption >= 0) {
+          const option = this.dropdown.options[this.dropdown.hoveredOption];
+          const region = this.dropdown.region;
+
+          if (option.action === "delete") {
+            if (this.dropdown.deleteConfirmationActive) {
+              this.executeDropdownAction(option.action, region);
+              this.hideDropdown();
+            } else {
+              this.dropdown.deleteConfirmationActive = true;
+            }
+          } else {
+            this.executeDropdownAction(option.action, region);
+            this.hideDropdown();
+          }
+        }
+        return true;
+      }
+      return true;
+    }
+
     if (this.filterTextField && this.filterTextField.isFocused()) {
       if (keyCode === 1) {
         // ESC
@@ -1550,6 +1784,8 @@ class RegionsVisualCache {
     this.scrollbarDragging = false;
     this.filterTextField = null;
     this.initializeTextField = true;
+
+    this.hideDropdown();
 
     this.restoreAllKeybinds();
   }

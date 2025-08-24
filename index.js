@@ -12,7 +12,6 @@ import "./menus/functions";
 import "./menus/custommenus";
 import "./menus/commands";
 
-
 import { PREFIX } from "./utils/constants";
 
 const File = Java.type("java.io.File");

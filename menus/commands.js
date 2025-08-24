@@ -127,10 +127,25 @@ class CommandsVisualCache {
 
     this.keybindBlocker = null;
 
-    // Command edit GUI detection
     this.lastCommandInventorySnapshot = null;
     this.isInCommandEditGUI = false;
     this.commandEditGUITimeout = null;
+
+    this.dropdown = {
+      isVisible: false,
+      command: null,
+      x: 0,
+      y: 0,
+      width: 30,
+      height: 0,
+      hoveredOption: -1,
+      deleteConfirmationActive: false,
+      options: [
+        { text: "Edit", action: "edit", color: "§e" },
+        { text: "Actions", action: "actions", color: "§a" },
+        { text: "Delete", action: "delete", color: "§c" },
+      ],
+    };
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -149,6 +164,11 @@ class CommandsVisualCache {
       scanButton: 0xff2196f3,
       scanButtonHover: 0xff1976d2,
       scanButtonActive: 0xff0d47a1,
+      dropdownBg: 0xf0222222,
+      dropdownBorder: 0xff666666,
+      dropdownHover: 0xff555555,
+      deleteConfirmation: 0xff660000,
+      deleteConfirmationHover: 0xff880000,
     };
 
     this.registerEvents();
@@ -187,6 +207,181 @@ class CommandsVisualCache {
     }
   }
 
+  showDropdown(command, mouseX, mouseY) {
+    this.dropdown.isVisible = true;
+    this.dropdown.command = command;
+    this.dropdown.hoveredOption = -1;
+    this.dropdown.deleteConfirmationActive = false;
+
+    const itemHeight = 20;
+    this.dropdown.height = this.dropdown.options.length * itemHeight;
+
+    let maxWidth = 80; 
+    this.dropdown.options.forEach((option) => {
+      const textWidth = Renderer.getStringWidth(option.text) + 16;
+      maxWidth = Math.max(maxWidth, textWidth);
+    });
+
+    const confirmTextWidth =
+      Renderer.getStringWidth("CONFIRM") + 16;
+    maxWidth = Math.min(maxWidth, confirmTextWidth);
+
+    this.dropdown.width = maxWidth;
+
+    const screenWidth = Renderer.screen.getWidth();
+    const screenHeight = Renderer.screen.getHeight();
+
+    this.dropdown.x = Math.min(mouseX, screenWidth - this.dropdown.width - 10);
+    this.dropdown.y = Math.min(
+      mouseY,
+      screenHeight - this.dropdown.height - 10
+    );
+
+    this.dropdown.x = Math.max(10, this.dropdown.x);
+    this.dropdown.y = Math.max(10, this.dropdown.y);
+  }
+
+  hideDropdown() {
+    this.dropdown.isVisible = false;
+    this.dropdown.command = null;
+    this.dropdown.hoveredOption = -1;
+    this.dropdown.deleteConfirmationActive = false;
+  }
+
+  renderDropdown() {
+    if (!this.dropdown.isVisible || !this.dropdown.command) return;
+
+    const { x, y, width, height } = this.dropdown;
+    const itemHeight = 20;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    // Draw dropdown background with border
+    Renderer.drawRect(0xff000000, x - 1, y - 1, width + 2, height + 2);
+    Renderer.drawRect(this.colors.dropdownBg, x, y, width, height);
+
+    this.dropdown.hoveredOption = -1;
+
+    // Draw dropdown options
+    this.dropdown.options.forEach((option, index) => {
+      const itemY = y + index * itemHeight;
+
+      const isHovered =
+        mouseX >= x &&
+        mouseX <= x + width &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight;
+
+      if (isHovered) {
+        this.dropdown.hoveredOption = index;
+      }
+
+      let backgroundColor = this.colors.dropdownHover;
+      let optionText = option.text;
+      let textColor = option.color;
+
+      if (option.action === "delete") {
+        if (this.dropdown.deleteConfirmationActive) {
+          optionText = "CONFIRM";
+          textColor = "§c§l";
+          backgroundColor = isHovered
+            ? this.colors.deleteConfirmationHover
+            : this.colors.deleteConfirmation;
+        } else {
+          backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+        }
+      } else {
+        backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+      }
+
+      // Draw background if needed
+      if (backgroundColor !== 0x00000000) {
+        Renderer.drawRect(backgroundColor, x, itemY, width, itemHeight);
+      }
+
+      // Draw option text
+      const textX = x + 8;
+      const textY = itemY + (itemHeight - 8) / 2;
+      Renderer.drawStringWithShadow(textColor + optionText, textX, textY);
+    });
+
+    // Draw command name at the top
+    const headerText = `§7${this.dropdown.command.name}`;
+    const headerWidth = Renderer.getStringWidth(headerText);
+    if (headerWidth <= width - 16) {
+      Renderer.drawStringWithShadow(
+        headerText,
+        x + (width - headerWidth) / 2,
+        y - 12
+      );
+    }
+  }
+
+  handleDropdownClick(mouseX, mouseY) {
+    if (!this.dropdown.isVisible) return false;
+
+    const { x, y, width, height } = this.dropdown;
+
+    if (
+      mouseX >= x &&
+      mouseX <= x + width &&
+      mouseY >= y &&
+      mouseY <= y + height
+    ) {
+      if (this.dropdown.hoveredOption >= 0) {
+        const option = this.dropdown.options[this.dropdown.hoveredOption];
+        const command = this.dropdown.command;
+
+        if (option.action === "delete") {
+          if (this.dropdown.deleteConfirmationActive) {
+            ChatLib.chat(PREFIX + `§cDeleting command: ${command.name}`);
+            ChatLib.command(`command delete ${command.name}`);
+            this.hideDropdown();
+
+            setTimeout(() => {
+              ChatLib.command("commands");
+            }, 50);
+
+            return true;
+          } else {
+            this.dropdown.deleteConfirmationActive = true;
+            return true;
+          }
+        } else {
+          this.executeDropdownAction(option.action, command);
+          this.hideDropdown();
+          return true;
+        }
+      }
+    }
+
+    this.hideDropdown();
+    return false;
+  }
+
+  executeDropdownAction(action, command) {
+    switch (action) {
+      case "edit":
+        ChatLib.command(`command edit ${command.name}`);
+        break;
+      case "delete":
+        ChatLib.command(`command delete ${command.name}`);
+        break;
+      case "actions":
+        ChatLib.command(`command actions ${command.name}`);
+        break;
+      default:
+        ChatLib.chat(PREFIX + `§cUnknown action: ${action}`);
+    }
+  }
+
   registerEvents() {
     register("worldLoad", () => {
       const newWorld = World.getWorld();
@@ -196,21 +391,18 @@ class CommandsVisualCache {
       this.currentWorld = newWorld;
     });
 
-    // Command creation detection
     register("chat", (commandName, event) => {
       if (this.cachedCommands.length > 0) {
         this.handleCommandCreated(commandName);
       }
     }).setChatCriteria("Created command ${commandName}!");
 
-    // Command deletion detection
     register("chat", (commandName, event) => {
       if (this.cachedCommands.length > 0) {
         this.handleCommandDeleted(commandName);
       }
     }).setChatCriteria("Deleted the command ${commandName}");
 
-    // Initialize command edit GUI detection state
     this.lastCommandInventorySnapshot = null;
     this.isInCommandEditGUI = false;
     this.commandEditGUITimeout = null;
@@ -229,11 +421,9 @@ class CommandsVisualCache {
         const title = inventory.getName();
         const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
 
-        // Detect command edit GUIs
         if (cleanTitle.startsWith("Edit: ") || cleanTitle === "Are you sure?") {
           this.isInCommandEditGUI = true;
         } else {
-          // Check for commands GUI with multiple attempts
           for (let i = 1; i <= 3; i++) {
             setTimeout(() => {
               this.checkForCommandsGUI(i);
@@ -251,14 +441,12 @@ class CommandsVisualCache {
       }
     });
 
-    // Cache validation during GUI render
     register("guiRender", () => {
       if (this.isActive && !this.isScanning && !this.isAutoScanning) {
         this.performCacheValidation();
       }
     });
 
-    // Page change detection
     register("itemTooltip", () => {
       if (this.isActive && !this.isScanning) {
         this.detectPageChange();
@@ -268,6 +456,7 @@ class CommandsVisualCache {
     register("guiRender", (mouseX, mouseY) => {
       if (this.isActive && this.cachedCommands.length > 0) {
         this.renderOverlay();
+        this.renderDropdown();
       }
     });
 
@@ -381,7 +570,6 @@ class CommandsVisualCache {
 
     if (!commandsRegex.test(cleanTitle)) return;
 
-    // Get current page number
     const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Commands$/);
     const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
 
@@ -400,7 +588,6 @@ class CommandsVisualCache {
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
 
-    // Only validate if we're in the commands GUI
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
     const commandsRegex = /^\(\d+\/\d+\) Commands$|^Commands$/;
@@ -435,6 +622,10 @@ class CommandsVisualCache {
   }
 
   handleMouseScroll(direction) {
+    if (this.dropdown.isVisible) {
+      this.hideDropdown();
+    }
+
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
@@ -521,6 +712,8 @@ class CommandsVisualCache {
       clearTimeout(this.commandEditGUITimeout);
       this.commandEditGUITimeout = null;
     }
+
+    this.hideDropdown();
 
     this.restoreAllKeybinds();
   }
@@ -728,11 +921,9 @@ class CommandsVisualCache {
       if (updatedPlaceholders > 0)
         message += ` ~${updatedPlaceholders} updated`;
 
-      // Only show rename message if 2 or fewer renames
       if (renamedCommands > 0 && renamedCommands <= 2)
         message += ` ↻${renamedCommands} renamed`;
 
-      // Only show deletion message if 2 or fewer deletions
       if (deletedCommands.length > 0 && deletedCommands.length <= 2)
         message += ` -${deletedCommands.length} deleted`;
 
@@ -754,11 +945,9 @@ class CommandsVisualCache {
       if (updatedPlaceholders > 0)
         message += ` Updated ${updatedPlaceholders} placeholders.`;
 
-      // Only show rename message if 2 or fewer renames
       if (renamedCommands > 0 && renamedCommands <= 2)
         message += ` Detected ${renamedCommands} renames.`;
 
-      // Only show deletion message if 2 or fewer deletions
       if (deletedCommands.length > 0 && deletedCommands.length <= 2)
         message += ` Removed ${deletedCommands.length} deleted commands.`;
 
@@ -799,7 +988,6 @@ class CommandsVisualCache {
 
     this.isAutoScanning = true;
 
-    // Go to first page before starting
     const inventory = Player.getOpenedInventory();
     const previousPageItem = inventory.getStackInSlot(45);
 
@@ -848,7 +1036,6 @@ class CommandsVisualCache {
 
     const nextPageItem = inventory.getStackInSlot(53);
 
-    // Left click to go to next page if it exists
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       inventory.click(53, false, "LEFT");
       this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
@@ -1050,17 +1237,18 @@ class CommandsVisualCache {
       const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawCommandsList(panelX, currentY, panelWidth, listHeight);
 
-      const buttonY = currentY + listHeight + 10;
+      const buttonY = currentY + listHeight;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
       const instructions = [
+        "§7Left click to edit • Right click for more options",
         "§eCAUTION: Commands with long names might not save to Last Command!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
       ];
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
         const instrX = panelX + (panelWidth - instrWidth) / 2;
-        const instrY = panelY + panelHeight - 35 + index * 10;
+        const instrY = panelY + panelHeight - 45 + index * 10;
         Renderer.drawStringWithShadow(instruction, instrX, instrY);
       });
     } catch (error) {
@@ -1190,7 +1378,6 @@ class CommandsVisualCache {
         );
       }
 
-      // Check if command has description
       const hasDescription =
         cmd.hasDescription &&
         (cmd.description || (cmd.descriptions && cmd.descriptions.length > 0));
@@ -1234,7 +1421,6 @@ class CommandsVisualCache {
         );
       }
 
-      // Draw page number if multiple pages
       if (this.totalPages > 1 && panelWidth > 250) {
         const pageText = `§8[P${cmd.page}]`;
         const pageWidth = Renderer.getStringWidth(pageText);
@@ -1274,7 +1460,7 @@ class CommandsVisualCache {
     let color = 0xff666666;
 
     if (cmd.isPlaceholder) {
-      color = 0xffffaa00; // Orange for new commands
+      color = 0xffffaa00;
     } else if (cmd.name) {
       let hash = 0;
       for (let i = 0; i < cmd.name.length; i++) {
@@ -1370,12 +1556,17 @@ class CommandsVisualCache {
   }
 
   handleMouseClick(mouseX, mouseY, button) {
-    if (!this.isActive || button !== 0) return false;
+    if (!this.isActive) return false;
 
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
+    if (this.dropdown.isVisible) {
+      return this.handleDropdownClick(mouseX, mouseY);
+    }
+
     if (
+      button === 0 &&
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
       mouseX <= this.autoScanButton.x + this.autoScanButton.width &&
@@ -1390,7 +1581,7 @@ class CommandsVisualCache {
       return true;
     }
 
-    if (this.filterTextField) {
+    if (this.filterTextField && button === 0) {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -1400,11 +1591,18 @@ class CommandsVisualCache {
     ) {
       const cmd = this.filteredCommands[this.hoveredIndex];
       this.selectedIndex = this.hoveredIndex;
-      this.editCommand(cmd);
-      return true;
+
+      if (button === 0) {
+        // Left click - edit command
+        this.editCommand(cmd);
+        return true;
+      } else if (button === 1) {
+        // Right click - show dropdown
+        this.showDropdown(cmd, mouseX, mouseY);
+        return true;
+      }
     }
 
-    // Check if click is within panel bounds
     if (
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&
@@ -1418,6 +1616,52 @@ class CommandsVisualCache {
   }
 
   handleKeyPress(keyCode, char) {
+    // Handle dropdown key presses
+    if (this.dropdown.isVisible) {
+      if (keyCode === 1) {
+        // ESC - close dropdown
+        this.hideDropdown();
+        return true;
+      } else if (keyCode === 200) {
+        // Up arrow - navigate dropdown up
+        if (this.dropdown.hoveredOption > 0) {
+          this.dropdown.hoveredOption--;
+        } else {
+          this.dropdown.hoveredOption = this.dropdown.options.length - 1;
+        }
+        return true;
+      } else if (keyCode === 208) {
+        // Down arrow - navigate dropdown down
+        if (this.dropdown.hoveredOption < this.dropdown.options.length - 1) {
+          this.dropdown.hoveredOption++;
+        } else {
+          this.dropdown.hoveredOption = 0;
+        }
+        return true;
+      } else if (keyCode === 28) {
+        // Enter - execute dropdown option
+        if (this.dropdown.hoveredOption >= 0) {
+          const option = this.dropdown.options[this.dropdown.hoveredOption];
+          const command = this.dropdown.command;
+
+          // Handle delete confirmation with Enter key
+          if (option.action === "delete") {
+            if (this.dropdown.deleteConfirmationActive) {
+              this.executeDropdownAction(option.action, command);
+              this.hideDropdown();
+            } else {
+              this.dropdown.deleteConfirmationActive = true;
+            }
+          } else {
+            this.executeDropdownAction(option.action, command);
+            this.hideDropdown();
+          }
+        }
+        return true;
+      }
+      return true;
+    }
+
     if (this.filterTextField && this.filterTextField.isFocused()) {
       if (keyCode === 1) {
         // ESC
@@ -1521,6 +1765,8 @@ class CommandsVisualCache {
     this.scrollbarDragging = false;
     this.filterTextField = null;
     this.initializeTextField = true;
+
+    this.hideDropdown();
 
     this.restoreAllKeybinds();
   }

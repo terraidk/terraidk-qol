@@ -128,6 +128,22 @@ class MenusVisualCache {
     this.isInMenuEditGUI = false;
     this.menuEditGUITimeout = null;
 
+    this.dropdown = {
+      isVisible: false,
+      menu: null,
+      x: 0,
+      y: 0,
+      width: 30,
+      height: 0,
+      hoveredOption: -1,
+      deleteConfirmationActive: false,
+      options: [
+        { text: "Edit", action: "edit", color: "§e" },
+        { text: "Display", action: "display", color: "§7" },
+        { text: "Delete", action: "delete", color: "§c" },
+      ],
+    };
+
     this.colors = {
       panelBg: 0xe0000000,
       panelBorder: 0xff333333,
@@ -145,6 +161,11 @@ class MenusVisualCache {
       scanButton: 0xff2196f3,
       scanButtonHover: 0xff1976d2,
       scanButtonActive: 0xff0d47a1,
+      dropdownBg: 0xf0222222,
+      dropdownBorder: 0xff666666,
+      dropdownHover: 0xff555555,
+      deleteConfirmation: 0xff660000,
+      deleteConfirmationHover: 0xff880000,
     };
 
     this.registerEvents();
@@ -174,6 +195,174 @@ class MenusVisualCache {
         cancel(event);
       }
     });
+  }
+
+  showDropdown(menu, mouseX, mouseY) {
+    this.dropdown.isVisible = true;
+    this.dropdown.menu = menu;
+    this.dropdown.hoveredOption = -1;
+    this.dropdown.deleteConfirmationActive = false;
+
+    const itemHeight = 20;
+    this.dropdown.height = this.dropdown.options.length * itemHeight;
+
+    let maxWidth = 80;
+    this.dropdown.options.forEach((option) => {
+      const textWidth = Renderer.getStringWidth(option.text) + 16;
+      maxWidth = Math.max(maxWidth, textWidth);
+    });
+
+    const confirmTextWidth = Renderer.getStringWidth("CONFIRM") + 16;
+    maxWidth = Math.min(maxWidth, confirmTextWidth);
+
+    this.dropdown.width = maxWidth;
+
+    const screenWidth = Renderer.screen.getWidth();
+    const screenHeight = Renderer.screen.getHeight();
+
+    this.dropdown.x = Math.min(mouseX, screenWidth - this.dropdown.width - 10);
+    this.dropdown.y = Math.min(
+      mouseY,
+      screenHeight - this.dropdown.height - 10
+    );
+
+    this.dropdown.x = Math.max(10, this.dropdown.x);
+    this.dropdown.y = Math.max(10, this.dropdown.y);
+  }
+
+  hideDropdown() {
+    this.dropdown.isVisible = false;
+    this.dropdown.menu = null;
+    this.dropdown.hoveredOption = -1;
+    this.dropdown.deleteConfirmationActive = false;
+  }
+
+  renderDropdown() {
+    if (!this.dropdown.isVisible || !this.dropdown.menu) return;
+
+    const { x, y, width, height } = this.dropdown;
+    const itemHeight = 20;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    Renderer.drawRect(0xff000000, x - 1, y - 1, width + 2, height + 2);
+    Renderer.drawRect(this.colors.dropdownBg, x, y, width, height);
+
+    this.dropdown.hoveredOption = -1;
+
+    this.dropdown.options.forEach((option, index) => {
+      const itemY = y + index * itemHeight;
+      const isHovered =
+        mouseX >= x &&
+        mouseX <= x + width &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight;
+
+      if (isHovered) this.dropdown.hoveredOption = index;
+
+      let backgroundColor = this.colors.dropdownHover;
+      let optionText = option.text;
+      let textColor = option.color;
+
+      if (option.action === "delete") {
+        if (this.dropdown.deleteConfirmationActive) {
+          optionText = "CONFIRM";
+          textColor = "§c§l";
+          backgroundColor = isHovered
+            ? this.colors.deleteConfirmationHover
+            : this.colors.deleteConfirmation;
+        } else {
+          backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+        }
+      } else {
+        backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+      }
+
+      if (backgroundColor !== 0x00000000) {
+        Renderer.drawRect(backgroundColor, x, itemY, width, itemHeight);
+      }
+
+      Renderer.drawStringWithShadow(
+        textColor + optionText,
+        x + 8,
+        itemY + (itemHeight - 8) / 2
+      );
+    });
+
+    // Draw menu name at top
+    const headerText = `§7${this.dropdown.menu.name}`;
+    const headerWidth = Renderer.getStringWidth(headerText);
+    if (headerWidth <= width - 16) {
+      Renderer.drawStringWithShadow(
+        headerText,
+        x + (width - headerWidth) / 2,
+        y - 12
+      );
+    }
+  }
+
+  handleDropdownClick(mouseX, mouseY) {
+    if (!this.dropdown.isVisible) return false;
+
+    const { x, y, width, height } = this.dropdown;
+
+    if (
+      mouseX >= x &&
+      mouseX <= x + width &&
+      mouseY >= y &&
+      mouseY <= y + height
+    ) {
+      if (this.dropdown.hoveredOption >= 0) {
+        const option = this.dropdown.options[this.dropdown.hoveredOption];
+        const menu = this.dropdown.menu;
+
+        if (option.action === "delete") {
+          if (this.dropdown.deleteConfirmationActive) {
+            ChatLib.chat(PREFIX + `§cDeleting menu: ${menu.name}`);
+            ChatLib.command(`menu delete ${menu.name}`);
+            this.hideDropdown();
+
+            setTimeout(() => {
+              ChatLib.command("menus");
+            }, 50);
+
+            return true;
+          } else {
+            this.dropdown.deleteConfirmationActive = true;
+            return true;
+          }
+        } else {
+          this.executeDropdownAction(option.action, menu);
+          this.hideDropdown();
+          return true;
+        }
+      }
+    }
+    this.hideDropdown();
+    return false;
+  }
+
+  executeDropdownAction(action, menu) {
+    switch (action) {
+      case "edit":
+        ChatLib.command(`menu edit ${menu.name}`);
+        break;
+      case "display":
+        ChatLib.command(`menu display ${menu.name}`);
+        break;
+      case "delete":
+        ChatLib.command(`menu delete ${menu.name}`);
+        break;
+      default:
+        ChatLib.chat(PREFIX + `§cUnknown action: ${action}`);
+    }
   }
 
   restoreAllKeybinds() {
@@ -257,6 +446,7 @@ class MenusVisualCache {
     register("guiRender", (mouseX, mouseY) => {
       if (this.isActive && this.cachedMenus.length > 0) {
         this.renderOverlay();
+        this.renderDropdown();
       }
     });
 
@@ -362,7 +552,6 @@ class MenusVisualCache {
 
     if (!menusRegex.test(cleanTitle)) return;
 
-    // Get current page number
     const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/);
     const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
 
@@ -381,7 +570,6 @@ class MenusVisualCache {
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
 
-    // Only validate if we're in the menus GUI
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
     const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/;
@@ -415,6 +603,10 @@ class MenusVisualCache {
   }
 
   handleMouseScroll(direction) {
+    if (this.dropdown.isVisible) {
+      this.hideDropdown();
+    }
+
     const availableHeight = this.getListAvailableHeight();
     const itemHeight = 23;
     const maxVisibleItems = Math.floor(availableHeight / itemHeight);
@@ -666,7 +858,6 @@ class MenusVisualCache {
             );
 
             if (possibleRename) {
-              // Only show individual rename message if 2 or fewer total renames expected
               if (renamedMenus < 2) {
                 ChatLib.chat(
                   PREFIX +
@@ -700,7 +891,6 @@ class MenusVisualCache {
 
     if (deletedMenus.length > 0) {
       deletedMenus.forEach((menu) => {
-        // Only show individual deletion message if 2 or fewer deletions
         if (deletedMenus.length <= 2) {
           ChatLib.chat(PREFIX + `§cDeleted menu detected: "${menu.name}"`);
         }
@@ -717,11 +907,9 @@ class MenusVisualCache {
       if (updatedPlaceholders > 0)
         message += ` ~${updatedPlaceholders} updated`;
 
-      // Only show rename message if 2 or fewer renames
       if (renamedMenus > 0 && renamedMenus <= 2)
         message += ` ↻${renamedMenus} renamed`;
 
-      // Only show deletion message if 2 or fewer deletions
       if (deletedMenus.length > 0 && deletedMenus.length <= 2)
         message += ` -${deletedMenus.length} deleted`;
 
@@ -742,11 +930,9 @@ class MenusVisualCache {
       if (updatedPlaceholders > 0)
         message += ` Updated ${updatedPlaceholders} placeholders.`;
 
-      // Only show rename message if 2 or fewer renames
       if (renamedMenus > 0 && renamedMenus <= 2)
         message += ` Detected ${renamedMenus} renames.`;
 
-      // Only show deletion message if 2 or fewer deletions
       if (deletedMenus.length > 0 && deletedMenus.length <= 2)
         message += ` Removed ${deletedMenus.length} deleted menus.`;
 
@@ -835,7 +1021,6 @@ class MenusVisualCache {
 
     const nextPageItem = inventory.getStackInSlot(53);
 
-    // left click to go to next page if it exists
     if (nextPageItem && nextPageItem.getName() !== "Air") {
       inventory.click(53, false, "LEFT");
       this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
@@ -1030,10 +1215,11 @@ class MenusVisualCache {
       const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawMenusList(panelX, currentY, panelWidth, listHeight);
 
-      const buttonY = currentY + listHeight + 10;
+      const buttonY = currentY + listHeight;
       this.drawAutoScanButton(panelX, buttonY, panelWidth);
 
       const instructions = [
+        "§7Left click to edit • Right click for more options",
         "§eCAUTION: Menus with long names might not save to Last Menu!",
         "§eCAUTION: The speed of the buttons is dependant on your ping!",
       ];
@@ -1170,7 +1356,6 @@ class MenusVisualCache {
         );
       }
 
-      // Check if menu has description
       const hasDescription =
         menu.hasDescription &&
         (menu.description ||
@@ -1215,7 +1400,6 @@ class MenusVisualCache {
         );
       }
 
-      // Draw page number if multiple pages
       if (this.totalPages > 1 && panelWidth > 250) {
         const pageText = `§8[P${menu.page}]`;
         const pageWidth = Renderer.getStringWidth(pageText);
@@ -1351,12 +1535,17 @@ class MenusVisualCache {
   }
 
   handleMouseClick(mouseX, mouseY, button) {
-    if (!this.isActive || button !== 0) return false;
+    if (!this.isActive) return false;
 
     const panelDims = this.calculatePanelDimensions();
     const { width: panelWidth, x: panelX, y: panelY } = panelDims;
 
+    if (this.dropdown.isVisible) {
+      return this.handleDropdownClick(mouseX, mouseY);
+    }
+
     if (
+      button === 0 &&
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
       mouseX <= this.autoScanButton.x + this.autoScanButton.width &&
@@ -1371,7 +1560,7 @@ class MenusVisualCache {
       return true;
     }
 
-    if (this.filterTextField) {
+    if (this.filterTextField && button === 0) {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
@@ -1381,11 +1570,18 @@ class MenusVisualCache {
     ) {
       const menu = this.filteredMenus[this.hoveredIndex];
       this.selectedIndex = this.hoveredIndex;
-      this.editMenu(menu);
-      return true;
+
+      if (button === 0) {
+        // Left click - edit menu
+        this.editMenu(menu);
+        return true;
+      } else if (button === 1) {
+        // Right click - show dropdown
+        this.showDropdown(menu, mouseX, mouseY);
+        return true;
+      }
     }
 
-    // Check if click is within panel bounds
     if (
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&
@@ -1399,6 +1595,58 @@ class MenusVisualCache {
   }
 
   handleKeyPress(keyCode, char) {
+    // Handle dropdown key presses
+    if (this.dropdown.isVisible) {
+      if (keyCode === 1) {
+        // ESC - close dropdown
+        this.hideDropdown();
+        return true;
+      } else if (keyCode === 200) {
+        // Up arrow - navigate dropdown up
+        if (this.dropdown.hoveredOption > 0) {
+          this.dropdown.hoveredOption--;
+        } else {
+          this.dropdown.hoveredOption = this.dropdown.options.length - 1;
+        }
+        return true;
+      } else if (keyCode === 208) {
+        // Down arrow - navigate dropdown down
+        if (this.dropdown.hoveredOption < this.dropdown.options.length - 1) {
+          this.dropdown.hoveredOption++;
+        } else {
+          this.dropdown.hoveredOption = 0;
+        }
+        return true;
+      } else if (keyCode === 28) {
+        // Enter - execute dropdown option
+        if (this.dropdown.hoveredOption >= 0) {
+          const option = this.dropdown.options[this.dropdown.hoveredOption];
+          const menu = this.dropdown.menu;
+
+          // Handle delete confirmation with Enter key
+          if (option.action === "delete") {
+            if (this.dropdown.deleteConfirmationActive) {
+              optionText = "CONFIRM";
+              textColor = "§c§l";
+              backgroundColor = isHovered
+                ? this.colors.deleteConfirmationHover
+                : this.colors.deleteConfirmation;
+            } else {
+              backgroundColor = isHovered
+                ? this.colors.dropdownHover
+                : 0x00000000;
+            }
+          } else {
+            this.executeDropdownAction(option.action, menu);
+            this.hideDropdown();
+          }
+        }
+        return true;
+      }
+      return true;
+    }
+
+    // Rest of the existing handleKeyPress logic...
     if (this.filterTextField && this.filterTextField.isFocused()) {
       if (keyCode === 1) {
         // ESC
@@ -1499,6 +1747,8 @@ class MenusVisualCache {
     this.scrollbarDragging = false;
     this.filterTextField = null;
     this.initializeTextField = true;
+
+    this.hideDropdown();
 
     this.restoreAllKeybinds();
   }
