@@ -107,7 +107,7 @@ class MenusVisualCache {
     this.selectedIndex = -1;
     this.scrollOffset = 0;
     this.currentWorld = null;
-    this.filterText = "";
+    this.filterText = this.persistFilterText;
     this.showingFilter = false;
     this.scannedPages = new Set();
     this.totalPages = 0;
@@ -121,6 +121,7 @@ class MenusVisualCache {
 
     this.filterTextField = null;
     this.initializeTextField = true;
+    this.persistentFilterText = "";
 
     this.keybindBlocker = null;
 
@@ -166,6 +167,9 @@ class MenusVisualCache {
       dropdownHover: 0xff555555,
       deleteConfirmation: 0xff660000,
       deleteConfirmationHover: 0xff880000,
+      createButton: 0xff4caf50,
+      createButtonHover: 0xff45a049,
+      createButtonDisabled: 0xff666666,
     };
 
     this.registerEvents();
@@ -296,7 +300,6 @@ class MenusVisualCache {
       );
     });
 
-    // Draw menu name at top
     const headerText = `§7${this.dropdown.menu.name}`;
     const headerWidth = Renderer.getStringWidth(headerText);
     if (headerWidth <= width - 16) {
@@ -1129,6 +1132,34 @@ class MenusVisualCache {
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
+  saveFilterText() {
+    if (this.filterTextField) {
+      this.persistentFilterText = this.filterTextField.getText();
+    }
+  }
+
+  loadFilterText() {
+    return this.persistentFilterText;
+  }
+
+  getScannedPagesDisplay() {
+    if (this.totalPages === 999) {
+      return `(${this.scannedPages.size}/?)`;
+    } else if (this.totalPages === 0) {
+      return `(${this.scannedPages.size}/?)`;
+    } else {
+      return `(${this.scannedPages.size}/${this.totalPages})`;
+    }
+  }
+
+  areAllPagesScanned() {
+    if (this.scannedPages.size === 0) return false;
+    if (this.totalPages === 0 || this.totalPages === 999) {
+      return false;
+    }
+    return this.scannedPages.size >= this.totalPages;
+  }
+
   renderOverlay() {
     try {
       const panelDims = this.calculatePanelDimensions();
@@ -1151,8 +1182,9 @@ class MenusVisualCache {
         this.initializeTextField = false;
 
         if (this.filterTextField) {
-          this.filterTextField.setText("");
-          this.filterText = "";
+          const savedFilterText = this.loadFilterText();
+          this.filterTextField.setText(savedFilterText);
+          this.filterText = savedFilterText;
           this.updateFilteredMenus();
         }
       }
@@ -1180,16 +1212,9 @@ class MenusVisualCache {
       const placeholderCount = this.cachedMenus.filter(
         (m) => m.isPlaceholder
       ).length;
-      const scannedInfo =
-        this.totalPages === 999
-          ? `(${this.scannedPages.size}/?)`
-          : `(${this.scannedPages.size}/${this.totalPages})`;
-
+      const scannedInfo = this.getScannedPagesDisplay();
       let title = `${PREFIX}Custom Menus (${this.cachedMenus.length}) ${scannedInfo}`;
-      if (placeholderCount > 0) {
-        title += ` §e[${placeholderCount} new]`;
-      }
-
+      if (placeholderCount > 0) title += ` §e[${placeholderCount} new]`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -1198,20 +1223,72 @@ class MenusVisualCache {
       );
       currentY += 20;
 
-      // Render filter text field
       if (this.filterTextField) {
+        const filterText = this.filterTextField.getText();
+        const hasText = filterText && filterText.length > 0;
+        const filterFieldWidth = hasText ? panelWidth - 40 : panelWidth - 20;
+        this.filterTextField.setWidth(filterFieldWidth);
         this.filterTextField.render();
 
-        const currentText = this.filterTextField.getText();
-        if (currentText !== this.filterText) {
-          this.filterText = currentText;
+        if (hasText) {
+          const buttonSize = 20;
+          const buttonX = panelX + 10 + filterFieldWidth + 4;
+          const buttonY = currentY;
+          let mouseX = 0,
+            mouseY = 0;
+          try {
+            mouseX = Client.getMouseX();
+            mouseY = Client.getMouseY();
+          } catch (e) {}
+          const isHovered =
+            mouseX >= buttonX &&
+            mouseX <= buttonX + buttonSize &&
+            mouseY >= buttonY &&
+            mouseY <= buttonY + buttonSize;
+          const color = isHovered ? 0xffff5555 : 0xffff0000;
+          Renderer.drawRect(color, buttonX, buttonY, buttonSize, buttonSize);
+          Renderer.drawRect(0xff000000, buttonX, buttonY, buttonSize, 1);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX,
+            buttonY + buttonSize - 1,
+            buttonSize,
+            1
+          );
+          Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonSize);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX + buttonSize - 1,
+            buttonY,
+            1,
+            buttonSize
+          );
+          const xTextWidth = Renderer.getStringWidth("X");
+          Renderer.drawStringWithShadow(
+            "§fX",
+            buttonX + (buttonSize - xTextWidth) / 2,
+            buttonY + 4
+          );
+
+          this.clearFilterButton = {
+            x: buttonX,
+            y: buttonY,
+            width: buttonSize,
+            height: buttonSize,
+          };
+        } else {
+          this.clearFilterButton = null;
+        }
+
+        if (filterText !== this.filterText) {
+          this.filterText = filterText;
+          this.persistentFilterText = filterText;
           this.updateFilteredMenus();
         }
       }
 
       currentY += 30;
 
-      // Draw menus list
       const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawMenusList(panelX, currentY, panelWidth, listHeight);
 
@@ -1257,21 +1334,105 @@ class MenusVisualCache {
 
     this.hoveredIndex = -1;
 
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(
-      startIndex + maxVisibleItems,
-      this.filteredMenus.length
-    );
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
 
+    const shouldShowCreateButton =
+      this.filteredMenus.length === 0 && filterText.length > 0;
+    if (this.filteredMenus.length === 0) {
+      const noResultsText = "§7No menus match your search";
+      const noResultsWidth = Renderer.getStringWidth(noResultsText);
+      const noResultsX = panelX + (panelWidth - noResultsWidth) / 2;
+      const noResultsY = listStartY + 20;
+      Renderer.drawStringWithShadow(noResultsText, noResultsX, noResultsY);
+
+      if (shouldShowCreateButton) {
+        const buttonY = listStartY + 50;
+        const buttonHeight = 25;
+        const buttonWidth = Math.min(250, panelWidth - 40);
+        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+
+        const isHovered =
+          mouseX >= buttonX &&
+          mouseX <= buttonX + buttonWidth &&
+          mouseY >= buttonY &&
+          mouseY <= buttonY + buttonHeight;
+
+        const buttonColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
+        const buttonText = `§f+ Create "${filterText}"`;
+
+        Renderer.drawRect(
+          buttonColor,
+          buttonX,
+          buttonY,
+          buttonWidth,
+          buttonHeight
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX,
+          buttonY + buttonHeight - 1,
+          buttonWidth,
+          1
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX + buttonWidth - 1,
+          buttonY,
+          1,
+          buttonHeight
+        );
+
+        const textWidth = Renderer.getStringWidth(buttonText);
+        const textX = buttonX + (buttonWidth - textWidth) / 2;
+        const textY = buttonY + (buttonHeight - 8) / 2;
+        Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+        this.createButton = {
+          x: buttonX,
+          y: buttonY,
+          width: buttonWidth,
+          height: buttonHeight,
+          menuName: filterText,
+          isDisabled: false,
+        };
+      } else {
+        this.createButton = null;
+      }
+
+      return;
+    }
+
+    this.createButton = null;
+
+    const listItems = [...this.filteredMenus];
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isPlaceholder: false,
+        ctItem: null,
+        hasDescription: false,
+        description: null,
+        menuName: filterText,
+        isCreateItem: true,
+      });
+    }
+
+    const startIndex = this.scrollOffset;
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
     const visibleItemCount = endIndex - startIndex;
     const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
 
-    // Draw scrollbar if needed
-    if (this.filteredMenus.length > maxVisibleItems) {
+    // Draw scrollbar
+    if (listItems.length > maxVisibleItems) {
       const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredMenus.length - maxVisibleItems;
+      const maxScrollRange = listItems.length - maxVisibleItems;
       const scrollbarHeight = actualContentHeight;
-
       Renderer.drawRect(
         this.colors.scrollbar,
         scrollbarX,
@@ -1282,16 +1443,14 @@ class MenusVisualCache {
 
       const thumbHeight = Math.max(
         10,
-        (maxVisibleItems / this.filteredMenus.length) * scrollbarHeight
+        (maxVisibleItems / listItems.length) * scrollbarHeight
       );
-
       const thumbY =
         maxScrollRange > 0
           ? listStartY +
             (this.scrollOffset / maxScrollRange) *
               (scrollbarHeight - thumbHeight)
           : listStartY;
-
       Renderer.drawRect(
         this.colors.scrollbarThumb,
         scrollbarX,
@@ -1301,9 +1460,8 @@ class MenusVisualCache {
       );
     }
 
-    // Draw menu items
     for (let i = startIndex; i < endIndex; i++) {
-      const menu = this.filteredMenus[i];
+      const menu = listItems[i];
       if (!menu) continue;
 
       const listIndex = i - startIndex;
@@ -1316,30 +1474,26 @@ class MenusVisualCache {
         mouseY >= itemY &&
         mouseY <= itemY + itemHeight;
 
-      if (isHovered) {
-        this.hoveredIndex = i;
-      }
+      if (isHovered) this.hoveredIndex = i;
 
       let bgColor = 0xff333333;
-      if (i === this.selectedIndex) {
-        bgColor = 0xff4caf50; // Green for selected
-      } else if (isHovered) {
-        bgColor = 0xff555555; // Lighter for hover
-      }
-
-      if (menu.isPlaceholder) {
-        bgColor = menu.isPlaceholder ? 0xff4a4a00 : bgColor;
+      if (i === this.selectedIndex) bgColor = 0xff4caf50;
+      else if (isHovered) bgColor = 0xff555555;
+      if (menu.isPlaceholder) bgColor = 0xff4a4a00;
+      if (menu.isCreateItem) {
+        bgColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
       }
 
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
-      // Draw menu icon
       try {
         if (menu.ctItem) {
           const iconX = itemX + iconMargin;
           const iconY = itemY + (itemHeight - iconSize) / 2;
           menu.ctItem.draw(iconX, iconY, 1.0);
-        } else {
+        } else if (!menu.isCreateItem) {
           this.drawFallbackIcon(
             itemX + iconMargin,
             itemY + (itemHeight - iconSize) / 2,
@@ -1348,12 +1502,14 @@ class MenusVisualCache {
           );
         }
       } catch (e) {
-        this.drawFallbackIcon(
-          itemX + iconMargin,
-          itemY + (itemHeight - iconSize) / 2,
-          iconSize,
-          menu
-        );
+        if (!menu.isCreateItem) {
+          this.drawFallbackIcon(
+            itemX + iconMargin,
+            itemY + (itemHeight - iconSize) / 2,
+            iconSize,
+            menu
+          );
+        }
       }
 
       const hasDescription =
@@ -1361,75 +1517,88 @@ class MenusVisualCache {
         (menu.description ||
           (menu.descriptions && menu.descriptions.length > 0));
 
-      // Draw menu name
-      const textStartX = itemX + iconSize + iconMargin * 2;
-      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      let textStartX, availableTextWidth;
 
-      const nameColor =
-        i === this.selectedIndex
-          ? "§a"
-          : isHovered
-          ? "§e"
-          : menu.isPlaceholder
-          ? "§6"
-          : "§f";
+      if (menu.isCreateItem) {
+        textStartX = itemX;
+        availableTextWidth = listWidth;
+      } else {
+        textStartX = itemX + iconSize + iconMargin * 2;
+        availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      }
+
+      const nameColor = menu.isCreateItem
+        ? "§f"
+        : i === this.selectedIndex
+        ? "§a"
+        : isHovered
+        ? "§e"
+        : menu.isPlaceholder
+        ? "§6"
+        : "§f";
       const menuName = menu.name || "Unknown Menu";
 
-      const maxChars = Math.floor(availableTextWidth / 6) - 2;
-      const displayName =
-        menuName.length > maxChars
-          ? menuName.substring(0, maxChars - 3) + "..."
-          : menuName;
-
-      const finalDisplayName = menu.isPlaceholder
-        ? displayName + " §8[NEW]"
-        : displayName;
-
-      if (hasDescription) {
+      if (menu.isCreateItem) {
+        const textWidth = Renderer.getStringWidth(menuName);
+        const centerX = textStartX + (availableTextWidth - textWidth) / 2;
         Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          itemY + 2
+          nameColor + menuName,
+          centerX,
+          itemY + (itemHeight - 8) / 2
         );
       } else {
-        const nameY = itemY + (itemHeight - 8) / 2;
-        Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          nameY
-        );
-      }
+        const pageCounter = menu.page ? `§8[P${menu.page}]` : "";
+        const pageCounterWidth = menu.page
+          ? Renderer.getStringWidth(`[P${menu.page}]`)
+          : 0;
 
-      if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${menu.page}]`;
-        const pageWidth = Renderer.getStringWidth(pageText);
-        const pageHeight = 8;
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+        const maxCharsForName =
+          Math.floor((availableTextWidth - pageCounterWidth - 10) / 6) - 2;
+        const displayName =
+          menuName.length > maxCharsForName
+            ? menuName.substring(0, maxCharsForName - 3) + "..."
+            : menuName;
 
-        Renderer.drawStringWithShadow(
-          pageText,
-          itemX + listWidth - pageWidth - 5,
-          pageY
-        );
-      }
+        const finalDisplayName = menu.isPlaceholder
+          ? displayName + " §8[NEW]"
+          : displayName;
 
-      if (hasDescription) {
-        let descriptionText = "";
-        if (menu.description) {
-          descriptionText = menu.description;
-        } else if (menu.descriptions && menu.descriptions.length > 0) {
-          descriptionText = menu.descriptions[0];
+        if (hasDescription) {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + 2
+          );
+        } else {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + (itemHeight - 8) / 2
+          );
         }
 
-        if (descriptionText) {
-          const descText = `§7${descriptionText}`;
-          const maxDescLength = Math.floor(availableTextWidth / 6);
-          const finalDescText =
-            descText.length > maxDescLength
-              ? descText.substring(0, maxDescLength - 3) + "..."
-              : descText;
+        if (menu.page) {
+          const pageX = itemX + listWidth - pageCounterWidth - 5;
+          const pageY = itemY + (itemHeight - 8) / 2;
+          Renderer.drawStringWithShadow(pageCounter, pageX, pageY);
+        }
 
-          Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
+        if (hasDescription) {
+          let descriptionText =
+            menu.description || (menu.descriptions && menu.descriptions[0]);
+          if (descriptionText) {
+            const descText = `§7${descriptionText}`;
+            const maxDescLength = Math.floor(availableTextWidth / 6);
+            const finalDescText =
+              descText.length > maxDescLength
+                ? descText.substring(0, maxDescLength - 3) + "..."
+                : descText;
+            Renderer.drawStringWithShadow(
+              finalDescText,
+              textStartX,
+              itemY + 12
+            );
+          }
         }
       }
     }
@@ -1538,10 +1707,53 @@ class MenusVisualCache {
     if (!this.isActive) return false;
 
     const panelDims = this.calculatePanelDimensions();
-    const { width: panelWidth, x: panelX, y: panelY } = panelDims;
+    const {
+      width: panelWidth,
+      height: panelHeight,
+      x: panelX,
+      y: panelY,
+    } = panelDims;
+
+    if (
+      this.clearFilterButton &&
+      button === 0 &&
+      mouseX >= this.clearFilterButton.x &&
+      mouseX <= this.clearFilterButton.x + this.clearFilterButton.width &&
+      mouseY >= this.clearFilterButton.y &&
+      mouseY <= this.clearFilterButton.y + this.clearFilterButton.height
+    ) {
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.persistentFilterText = "";
+        this.filterTextField.setIsFocused(false);
+        this.updateFilteredMenus();
+      }
+      return true;
+    }
 
     if (this.dropdown.isVisible) {
       return this.handleDropdownClick(mouseX, mouseY);
+    }
+
+    if (
+      button === 0 &&
+      this.createButton &&
+      mouseX >= this.createButton.x &&
+      mouseX <= this.createButton.x + this.createButton.width &&
+      mouseY >= this.createButton.y &&
+      mouseY <= this.createButton.y + this.createButton.height
+    ) {
+      if (!this.createButton.isDisabled) {
+        const menuName = this.createButton.menuName;
+        if (menuName && menuName.trim().length > 0) {
+          this.createMenu(menuName);
+        }
+      } else {
+        ChatLib.chat(
+          PREFIX + `§cPlease scan all pages before creating new menus!`
+        );
+      }
+      return true;
     }
 
     if (
@@ -1564,21 +1776,95 @@ class MenusVisualCache {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
-    if (
-      this.hoveredIndex >= 0 &&
-      this.hoveredIndex < this.filteredMenus.length
-    ) {
-      const menu = this.filteredMenus[this.hoveredIndex];
-      this.selectedIndex = this.hoveredIndex;
+    let currentY = panelY + 10;
+    currentY += 20;
+    currentY += 30;
+    const listStartY = currentY;
 
-      if (button === 0) {
-        // Left click - edit menu
-        this.editMenu(menu);
-        return true;
-      } else if (button === 1) {
-        // Right click - show dropdown
-        this.showDropdown(menu, mouseX, mouseY);
-        return true;
+    const itemHeight = 22;
+    const itemSpacing = 1;
+    const listWidth = panelWidth - 20;
+    const availableHeight = panelHeight - 130;
+    const maxVisibleItems = Math.floor(
+      availableHeight / (itemHeight + itemSpacing)
+    );
+    const startIndex = this.scrollOffset;
+
+    let listItems = [...this.filteredMenus];
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
+
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isCreateItem: true,
+        menuName: filterText,
+      });
+    }
+
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const menu = listItems[i];
+      if (!menu) continue;
+
+      const listIndex = i - startIndex;
+      const itemX = panelX + 10;
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+
+      if (
+        mouseX >= itemX &&
+        mouseX <= itemX + listWidth &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight
+      ) {
+        if (menu.isCreateItem) {
+          if (button === 0) {
+            const currentFilterText = this.filterTextField
+              ? this.filterTextField.getText().trim()
+              : "";
+
+            if (!currentFilterText || currentFilterText.length === 0) {
+              ChatLib.chat(PREFIX + `§cNo menu name entered!`);
+              return true;
+            }
+
+            const existingMenu = this.cachedMenus.find(
+              (m) => m.name === currentFilterText
+            );
+            if (existingMenu) {
+              ChatLib.chat(
+                PREFIX + `§cMenu "${currentFilterText}" already exists!`
+              );
+              return true;
+            }
+
+            ChatLib.chat(PREFIX + `§aCreating menu: "${currentFilterText}"`);
+            ChatLib.command(`menu create ${currentFilterText}`);
+
+            setTimeout(() => {
+              if (this.filterTextField) {
+                this.filterTextField.setText("");
+                this.filterText = "";
+                this.persistentFilterText = "";
+                this.updateFilteredMenus();
+              }
+            }, 100);
+
+            return true;
+          }
+          return true;
+        } else {
+          // Regular menu item
+          this.selectedIndex = i;
+          if (button === 0) {
+            this.editMenu(menu);
+          } else if (button === 1) {
+            this.showDropdown(menu, mouseX, mouseY);
+          }
+          return true;
+        }
       }
     }
 
@@ -1586,12 +1872,44 @@ class MenusVisualCache {
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&
       mouseY >= panelY &&
-      mouseY <= panelY + panelDims.height
+      mouseY <= panelY + panelHeight
     ) {
       return true;
     }
 
     return false;
+  }
+
+  createMenu(menuName) {
+    if (menuName && menuName.trim().length > 0) {
+      let cleanName = menuName;
+      if (cleanName.startsWith('+ Create "') && cleanName.endsWith('"')) {
+        cleanName = cleanName.replace(/^\+ Create "/, "").replace(/"$/, "");
+      }
+
+      if (cleanName.trim().length === 0) {
+        ChatLib.chat(PREFIX + `§cMenu name cannot be empty!`);
+        return;
+      }
+
+      const existingMenu = this.cachedMenus.find((m) => m.name === cleanName);
+      if (existingMenu) {
+        ChatLib.chat(PREFIX + `§cMenu "${cleanName}" already exists!`);
+        return;
+      }
+
+      ChatLib.chat(PREFIX + `§aCreating new menu: "${cleanName}"`);
+      ChatLib.command(`menu create ${cleanName}`);
+
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.filterText = "";
+        this.persistentFilterText = "";
+        this.updateFilteredMenus();
+      }
+    } else {
+      ChatLib.chat(PREFIX + `§cInvalid menu name!`);
+    }
   }
 
   handleKeyPress(keyCode, char) {
@@ -1754,5 +2072,4 @@ class MenusVisualCache {
   }
 }
 
-const menusVisualCache = new MenusVisualCache();
-export { menusVisualCache };
+export const menusVisualCache = new MenusVisualCache();

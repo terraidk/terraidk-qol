@@ -110,7 +110,7 @@ class CommandsVisualCache {
     this.selectedIndex = -1;
     this.scrollOffset = 0;
     this.currentWorld = null;
-    this.filterText = "";
+    this.filterText = this.persistentFilterText;
     this.showingFilter = false;
     this.scannedPages = new Set();
     this.totalPages = 0;
@@ -124,6 +124,7 @@ class CommandsVisualCache {
 
     this.filterTextField = null;
     this.initializeTextField = true;
+    this.persistentFilterText = "";
 
     this.keybindBlocker = null;
 
@@ -169,6 +170,9 @@ class CommandsVisualCache {
       dropdownHover: 0xff555555,
       deleteConfirmation: 0xff660000,
       deleteConfirmationHover: 0xff880000,
+      createButton: 0xff4caf50,
+      createButtonHover: 0xff45a049,
+      createButtonDisabled: 0xff666666,
     };
 
     this.registerEvents();
@@ -216,14 +220,13 @@ class CommandsVisualCache {
     const itemHeight = 20;
     this.dropdown.height = this.dropdown.options.length * itemHeight;
 
-    let maxWidth = 80; 
+    let maxWidth = 80;
     this.dropdown.options.forEach((option) => {
       const textWidth = Renderer.getStringWidth(option.text) + 16;
       maxWidth = Math.max(maxWidth, textWidth);
     });
 
-    const confirmTextWidth =
-      Renderer.getStringWidth("CONFIRM") + 16;
+    const confirmTextWidth = Renderer.getStringWidth("CONFIRM") + 16;
     maxWidth = Math.min(maxWidth, confirmTextWidth);
 
     this.dropdown.width = maxWidth;
@@ -312,7 +315,6 @@ class CommandsVisualCache {
       Renderer.drawStringWithShadow(textColor + optionText, textX, textY);
     });
 
-    // Draw command name at the top
     const headerText = `§7${this.dropdown.command.name}`;
     const headerWidth = Renderer.getStringWidth(headerText);
     if (headerWidth <= width - 16) {
@@ -603,7 +605,6 @@ class CommandsVisualCache {
     this.cachedCommands = this.cachedCommands.filter((cmd) => {
       if (cmd.deleted) return false;
 
-      // Remove stale placeholder commands older than 5 minutes
       if (
         cmd.isPlaceholder &&
         cmd.createdAt &&
@@ -712,12 +713,10 @@ class CommandsVisualCache {
       clearTimeout(this.commandEditGUITimeout);
       this.commandEditGUITimeout = null;
     }
-
-    this.hideDropdown();
+    this.createButton = null;
 
     this.restoreAllKeybinds();
   }
-
   checkForCommandsGUI(attempt) {
     if (this.isActive || this.isScanning) return;
 
@@ -1151,6 +1150,34 @@ class CommandsVisualCache {
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
+  saveFilterText() {
+    if (this.filterTextField) {
+      this.persistentFilterText = this.filterTextField.getText();
+    }
+  }
+
+  loadFilterText() {
+    return this.persistentFilterText;
+  }
+
+  getScannedPagesDisplay() {
+    if (this.totalPages === 999) {
+      return `(${this.scannedPages.size}/?)`;
+    } else if (this.totalPages === 0) {
+      return `(${this.scannedPages.size}/?)`;
+    } else {
+      return `(${this.scannedPages.size}/${this.totalPages})`;
+    }
+  }
+
+  areAllPagesScanned() {
+    if (this.scannedPages.size === 0) return false;
+    if (this.totalPages === 0 || this.totalPages === 999) {
+      return false;
+    }
+    return this.scannedPages.size >= this.totalPages;
+  }
+
   renderOverlay() {
     try {
       const panelDims = this.calculatePanelDimensions();
@@ -1173,8 +1200,9 @@ class CommandsVisualCache {
         this.initializeTextField = false;
 
         if (this.filterTextField) {
-          this.filterTextField.setText("");
-          this.filterText = "";
+          const savedFilterText = this.loadFilterText();
+          this.filterTextField.setText(savedFilterText);
+          this.filterText = savedFilterText;
           this.updateFilteredCommands();
         }
       }
@@ -1202,16 +1230,9 @@ class CommandsVisualCache {
       const placeholderCount = this.cachedCommands.filter(
         (c) => c.isPlaceholder
       ).length;
-      const scannedInfo =
-        this.totalPages === 999
-          ? `(${this.scannedPages.size}/?)`
-          : `(${this.scannedPages.size}/${this.totalPages})`;
-
+      const scannedInfo = this.getScannedPagesDisplay();
       let title = `${PREFIX}Commands (${this.cachedCommands.length}) ${scannedInfo}`;
-      if (placeholderCount > 0) {
-        title += ` §e[${placeholderCount} new]`;
-      }
-
+      if (placeholderCount > 0) title += ` §e[${placeholderCount} new]`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -1220,20 +1241,72 @@ class CommandsVisualCache {
       );
       currentY += 20;
 
-      // Render filter text field
       if (this.filterTextField) {
+        const filterText = this.filterTextField.getText();
+        const hasText = filterText && filterText.length > 0;
+        const filterFieldWidth = hasText ? panelWidth - 40 : panelWidth - 20;
+        this.filterTextField.setWidth(filterFieldWidth);
         this.filterTextField.render();
 
-        const currentText = this.filterTextField.getText();
-        if (currentText !== this.filterText) {
-          this.filterText = currentText;
+        if (hasText) {
+          const buttonSize = 20;
+          const buttonX = panelX + 10 + filterFieldWidth + 4;
+          const buttonY = currentY;
+          let mouseX = 0,
+            mouseY = 0;
+          try {
+            mouseX = Client.getMouseX();
+            mouseY = Client.getMouseY();
+          } catch (e) {}
+          const isHovered =
+            mouseX >= buttonX &&
+            mouseX <= buttonX + buttonSize &&
+            mouseY >= buttonY &&
+            mouseY <= buttonY + buttonSize;
+          const color = isHovered ? 0xffff5555 : 0xffff0000;
+          Renderer.drawRect(color, buttonX, buttonY, buttonSize, buttonSize);
+          Renderer.drawRect(0xff000000, buttonX, buttonY, buttonSize, 1);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX,
+            buttonY + buttonSize - 1,
+            buttonSize,
+            1
+          );
+          Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonSize);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX + buttonSize - 1,
+            buttonY,
+            1,
+            buttonSize
+          );
+          const xTextWidth = Renderer.getStringWidth("X");
+          Renderer.drawStringWithShadow(
+            "§fX",
+            buttonX + (buttonSize - xTextWidth) / 2,
+            buttonY + 4
+          );
+
+          this.clearFilterButton = {
+            x: buttonX,
+            y: buttonY,
+            width: buttonSize,
+            height: buttonSize,
+          };
+        } else {
+          this.clearFilterButton = null;
+        }
+
+        if (filterText !== this.filterText) {
+          this.filterText = filterText;
+          this.persistentFilterText = filterText;
           this.updateFilteredCommands();
         }
       }
 
       currentY += 30;
 
-      // Draw commands list
       const listHeight = panelHeight - (currentY - panelY) - 70;
       this.drawCommandsList(panelX, currentY, panelWidth, listHeight);
 
@@ -1248,7 +1321,7 @@ class CommandsVisualCache {
       instructions.forEach((instruction, index) => {
         const instrWidth = Renderer.getStringWidth(instruction);
         const instrX = panelX + (panelWidth - instrWidth) / 2;
-        const instrY = panelY + panelHeight - 45 + index * 10;
+        const instrY = panelY + panelHeight - 35 + index * 10;
         Renderer.drawStringWithShadow(instruction, instrX, instrY);
       });
     } catch (error) {
@@ -1279,21 +1352,105 @@ class CommandsVisualCache {
 
     this.hoveredIndex = -1;
 
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(
-      startIndex + maxVisibleItems,
-      this.filteredCommands.length
-    );
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
 
+    const shouldShowCreateButton =
+      this.filteredCommands.length === 0 && filterText.length > 0;
+    if (this.filteredCommands.length === 0) {
+      const noResultsText = "§7No commands match your search";
+      const noResultsWidth = Renderer.getStringWidth(noResultsText);
+      const noResultsX = panelX + (panelWidth - noResultsWidth) / 2;
+      const noResultsY = listStartY + 20;
+      Renderer.drawStringWithShadow(noResultsText, noResultsX, noResultsY);
+
+      if (shouldShowCreateButton) {
+        const buttonY = listStartY + 50;
+        const buttonHeight = 25;
+        const buttonWidth = Math.min(250, panelWidth - 40);
+        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+
+        const isHovered =
+          mouseX >= buttonX &&
+          mouseX <= buttonX + buttonWidth &&
+          mouseY >= buttonY &&
+          mouseY <= buttonY + buttonHeight;
+
+        const buttonColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
+        const buttonText = `§f+ Create "${filterText}"`;
+
+        Renderer.drawRect(
+          buttonColor,
+          buttonX,
+          buttonY,
+          buttonWidth,
+          buttonHeight
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX,
+          buttonY + buttonHeight - 1,
+          buttonWidth,
+          1
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX + buttonWidth - 1,
+          buttonY,
+          1,
+          buttonHeight
+        );
+
+        const textWidth = Renderer.getStringWidth(buttonText);
+        const textX = buttonX + (buttonWidth - textWidth) / 2;
+        const textY = buttonY + (buttonHeight - 8) / 2;
+        Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+        this.createButton = {
+          x: buttonX,
+          y: buttonY,
+          width: buttonWidth,
+          height: buttonHeight,
+          commandName: filterText,
+          isDisabled: false,
+        };
+      } else {
+        this.createButton = null;
+      }
+
+      return; 
+    }
+
+    this.createButton = null;
+
+    const listItems = [...this.filteredCommands];
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isPlaceholder: false,
+        ctItem: null,
+        hasDescription: false,
+        description: null,
+        commandName: filterText,
+        isCreateItem: true,
+      });
+    }
+
+    const startIndex = this.scrollOffset;
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
     const visibleItemCount = endIndex - startIndex;
     const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
 
-    // Draw scrollbar if needed
-    if (this.filteredCommands.length > maxVisibleItems) {
+    // Draw scrollbar
+    if (listItems.length > maxVisibleItems) {
       const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredCommands.length - maxVisibleItems;
+      const maxScrollRange = listItems.length - maxVisibleItems;
       const scrollbarHeight = actualContentHeight;
-
       Renderer.drawRect(
         this.colors.scrollbar,
         scrollbarX,
@@ -1304,16 +1461,14 @@ class CommandsVisualCache {
 
       const thumbHeight = Math.max(
         10,
-        (maxVisibleItems / this.filteredCommands.length) * scrollbarHeight
+        (maxVisibleItems / listItems.length) * scrollbarHeight
       );
-
       const thumbY =
         maxScrollRange > 0
           ? listStartY +
             (this.scrollOffset / maxScrollRange) *
               (scrollbarHeight - thumbHeight)
           : listStartY;
-
       Renderer.drawRect(
         this.colors.scrollbarThumb,
         scrollbarX,
@@ -1323,9 +1478,8 @@ class CommandsVisualCache {
       );
     }
 
-    // Draw command items
     for (let i = startIndex; i < endIndex; i++) {
-      const cmd = this.filteredCommands[i];
+      const cmd = listItems[i];
       if (!cmd) continue;
 
       const listIndex = i - startIndex;
@@ -1338,30 +1492,26 @@ class CommandsVisualCache {
         mouseY >= itemY &&
         mouseY <= itemY + itemHeight;
 
-      if (isHovered) {
-        this.hoveredIndex = i;
-      }
+      if (isHovered) this.hoveredIndex = i;
 
       let bgColor = 0xff333333;
-      if (i === this.selectedIndex) {
-        bgColor = 0xff4caf50; // Green for selected
-      } else if (isHovered) {
-        bgColor = 0xff555555; // Lighter for hover
-      }
-
-      if (cmd.isPlaceholder) {
-        bgColor = cmd.isPlaceholder ? 0xff4a4a00 : bgColor;
+      if (i === this.selectedIndex) bgColor = 0xff4caf50;
+      else if (isHovered) bgColor = 0xff555555;
+      if (cmd.isPlaceholder) bgColor = 0xff4a4a00;
+      if (cmd.isCreateItem) {
+        bgColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
       }
 
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
-      // Draw command icon
       try {
         if (cmd.ctItem) {
           const iconX = itemX + iconMargin;
           const iconY = itemY + (itemHeight - iconSize) / 2;
           cmd.ctItem.draw(iconX, iconY, 1.0);
-        } else {
+        } else if (!cmd.isCreateItem) {
           this.drawFallbackIcon(
             itemX + iconMargin,
             itemY + (itemHeight - iconSize) / 2,
@@ -1370,87 +1520,102 @@ class CommandsVisualCache {
           );
         }
       } catch (e) {
-        this.drawFallbackIcon(
-          itemX + iconMargin,
-          itemY + (itemHeight - iconSize) / 2,
-          iconSize,
-          cmd
-        );
+        if (!cmd.isCreateItem) {
+          this.drawFallbackIcon(
+            itemX + iconMargin,
+            itemY + (itemHeight - iconSize) / 2,
+            iconSize,
+            cmd
+          );
+        }
       }
 
       const hasDescription =
         cmd.hasDescription &&
         (cmd.description || (cmd.descriptions && cmd.descriptions.length > 0));
 
-      // Draw command name
-      const textStartX = itemX + iconSize + iconMargin * 2;
-      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      let textStartX, availableTextWidth;
 
-      const nameColor =
-        i === this.selectedIndex
-          ? "§a"
-          : isHovered
-          ? "§e"
-          : cmd.isPlaceholder
-          ? "§6"
-          : "§f";
+      if (cmd.isCreateItem) {
+        textStartX = itemX;
+        availableTextWidth = listWidth;
+      } else {
+        textStartX = itemX + iconSize + iconMargin * 2;
+        availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      }
+
+      const nameColor = cmd.isCreateItem
+        ? "§f"
+        : i === this.selectedIndex
+        ? "§a"
+        : isHovered
+        ? "§e"
+        : cmd.isPlaceholder
+        ? "§6"
+        : "§f";
       const commandName = cmd.name || "Unknown Command";
 
-      const maxChars = Math.floor(availableTextWidth / 6) - 2;
-      const displayName =
-        commandName.length > maxChars
-          ? commandName.substring(0, maxChars - 3) + "..."
-          : commandName;
-
-      const finalDisplayName = cmd.isPlaceholder
-        ? displayName + " §8[NEW]"
-        : displayName;
-
-      if (hasDescription) {
+      if (cmd.isCreateItem) {
+        const textWidth = Renderer.getStringWidth(commandName);
+        const centerX = textStartX + (availableTextWidth - textWidth) / 2;
         Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          itemY + 2
+          nameColor + commandName,
+          centerX,
+          itemY + (itemHeight - 8) / 2
         );
       } else {
-        const nameY = itemY + (itemHeight - 8) / 2;
-        Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          nameY
-        );
-      }
+        const pageCounter = cmd.page ? `§8[P${cmd.page}]` : "";
+        const pageCounterWidth = cmd.page
+          ? Renderer.getStringWidth(`[P${cmd.page}]`)
+          : 0;
 
-      if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${cmd.page}]`;
-        const pageWidth = Renderer.getStringWidth(pageText);
-        const pageHeight = 8;
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+        const maxCharsForName =
+          Math.floor((availableTextWidth - pageCounterWidth - 10) / 6) - 2;
+        const displayName =
+          commandName.length > maxCharsForName
+            ? commandName.substring(0, maxCharsForName - 3) + "..."
+            : commandName;
 
-        Renderer.drawStringWithShadow(
-          pageText,
-          itemX + listWidth - pageWidth - 5,
-          pageY
-        );
-      }
+        const finalDisplayName = cmd.isPlaceholder
+          ? displayName + " §8[NEW]"
+          : displayName;
 
-      if (hasDescription) {
-        let descriptionText = "";
-        if (cmd.description) {
-          descriptionText = cmd.description;
-        } else if (cmd.descriptions && cmd.descriptions.length > 0) {
-          descriptionText = cmd.descriptions[0];
+        if (hasDescription) {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + 2
+          );
+        } else {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + (itemHeight - 8) / 2
+          );
         }
 
-        if (descriptionText) {
-          const descText = `§7${descriptionText}`;
-          const maxDescLength = Math.floor(availableTextWidth / 6);
-          const finalDescText =
-            descText.length > maxDescLength
-              ? descText.substring(0, maxDescLength - 3) + "..."
-              : descText;
+        if (cmd.page) {
+          const pageX = itemX + listWidth - pageCounterWidth - 5;
+          const pageY = itemY + (itemHeight - 8) / 2;
+          Renderer.drawStringWithShadow(pageCounter, pageX, pageY);
+        }
 
-          Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
+        if (hasDescription) {
+          let descriptionText =
+            cmd.description || (cmd.descriptions && cmd.descriptions[0]);
+          if (descriptionText) {
+            const descText = `§7${descriptionText}`;
+            const maxDescLength = Math.floor(availableTextWidth / 6);
+            const finalDescText =
+              descText.length > maxDescLength
+                ? descText.substring(0, maxDescLength - 3) + "..."
+                : descText;
+            Renderer.drawStringWithShadow(
+              finalDescText,
+              textStartX,
+              itemY + 12
+            );
+          }
         }
       }
     }
@@ -1490,6 +1655,80 @@ class CommandsVisualCache {
       const centerY = y + (size - 8) / 2;
       Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
     }
+  }
+
+  drawCreateButton(panelX, buttonY, panelWidth, commandName) {
+    const buttonHeight = 25;
+    const buttonWidth = Math.min(250, panelWidth - 40);
+    const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    const isHovered =
+      mouseX >= buttonX &&
+      mouseX <= buttonX + buttonWidth &&
+      mouseY >= buttonY &&
+      mouseY <= buttonY + buttonHeight;
+
+    // Check if all pages are scanned
+    const allPagesScanned = this.areAllPagesScanned();
+    const isDisabled = !allPagesScanned;
+
+    let buttonColor;
+    let buttonText;
+
+    if (isDisabled) {
+      buttonColor = this.colors.createButtonDisabled;
+      buttonText = `§7(SCAN ALL PAGES FIRST)`;
+    } else {
+      buttonColor = isHovered
+        ? this.colors.createButtonHover
+        : this.colors.createButton;
+      buttonText = `§f+ Create "${commandName}"`;
+    }
+
+    // Draw button background
+    Renderer.drawRect(buttonColor, buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // Draw button border
+    Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1); // top
+    Renderer.drawRect(
+      0xff000000,
+      buttonX,
+      buttonY + buttonHeight - 1,
+      buttonWidth,
+      1
+    ); // bottom
+    Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight); // left
+    Renderer.drawRect(
+      0xff000000,
+      buttonX + buttonWidth - 1,
+      buttonY,
+      1,
+      buttonHeight
+    ); // right
+
+    // Draw button text
+    const textWidth = Renderer.getStringWidth(buttonText);
+    const textX = buttonX + (buttonWidth - textWidth) / 2;
+    const textY = buttonY + (buttonHeight - 8) / 2;
+    Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+    this.createButton = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight,
+      commandName: commandName,
+      isDisabled: isDisabled,
+    };
   }
 
   drawAutoScanButton(panelX, buttonY, panelWidth) {
@@ -1559,10 +1798,53 @@ class CommandsVisualCache {
     if (!this.isActive) return false;
 
     const panelDims = this.calculatePanelDimensions();
-    const { width: panelWidth, x: panelX, y: panelY } = panelDims;
+    const {
+      width: panelWidth,
+      height: panelHeight,
+      x: panelX,
+      y: panelY,
+    } = panelDims;
+
+    if (
+      this.clearFilterButton &&
+      button === 0 &&
+      mouseX >= this.clearFilterButton.x &&
+      mouseX <= this.clearFilterButton.x + this.clearFilterButton.width &&
+      mouseY >= this.clearFilterButton.y &&
+      mouseY <= this.clearFilterButton.y + this.clearFilterButton.height
+    ) {
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.persistentFilterText = "";
+        this.filterTextField.setIsFocused(false);
+        this.updateFilteredCommands();
+      }
+      return true;
+    }
 
     if (this.dropdown.isVisible) {
       return this.handleDropdownClick(mouseX, mouseY);
+    }
+
+    if (
+      button === 0 &&
+      this.createButton &&
+      mouseX >= this.createButton.x &&
+      mouseX <= this.createButton.x + this.createButton.width &&
+      mouseY >= this.createButton.y &&
+      mouseY <= this.createButton.y + this.createButton.height
+    ) {
+      if (!this.createButton.isDisabled) {
+        const commandName = this.createButton.commandName;
+        if (commandName && commandName.trim().length > 0) {
+          this.createCommand(commandName);
+        }
+      } else {
+        ChatLib.chat(
+          PREFIX + `§cPlease scan all pages before creating new commands!`
+        );
+      }
+      return true;
     }
 
     if (
@@ -1585,21 +1867,94 @@ class CommandsVisualCache {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
-    if (
-      this.hoveredIndex >= 0 &&
-      this.hoveredIndex < this.filteredCommands.length
-    ) {
-      const cmd = this.filteredCommands[this.hoveredIndex];
-      this.selectedIndex = this.hoveredIndex;
+    let currentY = panelY + 10; 
+    currentY += 20; 
+    currentY += 30; 
+    const listStartY = currentY; 
 
-      if (button === 0) {
-        // Left click - edit command
-        this.editCommand(cmd);
-        return true;
-      } else if (button === 1) {
-        // Right click - show dropdown
-        this.showDropdown(cmd, mouseX, mouseY);
-        return true;
+    const itemHeight = 22;
+    const itemSpacing = 1;
+    const listWidth = panelWidth - 20;
+    const availableHeight = panelHeight - 130; 
+    const maxVisibleItems = Math.floor(
+      availableHeight / (itemHeight + itemSpacing)
+    );
+    const startIndex = this.scrollOffset;
+
+    let listItems = [...this.filteredCommands];
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
+
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isCreateItem: true,
+        commandName: filterText,
+      });
+    }
+
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const cmd = listItems[i];
+      if (!cmd) continue;
+
+      const listIndex = i - startIndex;
+      const itemX = panelX + 10;
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+
+      if (
+        mouseX >= itemX &&
+        mouseX <= itemX + listWidth &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight
+      ) {
+        if (cmd.isCreateItem) {
+          if (button === 0) {
+            const currentFilterText = this.filterTextField
+              ? this.filterTextField.getText().trim()
+              : "";
+
+            if (!currentFilterText || currentFilterText.length === 0) {
+              ChatLib.chat(PREFIX + `§cNo command name entered!`);
+              return true;
+            }
+
+            const existingCommand = this.cachedCommands.find(
+              (c) => c.name === currentFilterText
+            );
+            if (existingCommand) {
+              ChatLib.chat(
+                PREFIX + `§cCommand "${currentFilterText}" already exists!`
+              );
+              return true;
+            }
+
+            ChatLib.chat(PREFIX + `§aCreating command: "${currentFilterText}"`);
+            ChatLib.command(`command create ${currentFilterText}`);
+
+            setTimeout(() => {
+              if (this.filterTextField) {
+                this.filterTextField.setText("");
+                this.filterText = "";
+                this.persistentFilterText = "";
+                this.updateFilteredCommands();
+              }
+            }, 100);
+
+            return true;
+          }
+          return true;
+        } else {
+          this.selectedIndex = i;
+          if (button === 0) {
+            this.editCommand(cmd);
+          } else if (button === 1) {
+            this.showDropdown(cmd, mouseX, mouseY);
+          }
+          return true;
+        }
       }
     }
 
@@ -1607,12 +1962,46 @@ class CommandsVisualCache {
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&
       mouseY >= panelY &&
-      mouseY <= panelY + panelDims.height
+      mouseY <= panelY + panelHeight
     ) {
       return true;
     }
 
     return false;
+  }
+
+  createCommand(commandName) {
+    if (commandName && commandName.trim().length > 0) {
+      let cleanName = commandName;
+      if (cleanName.startsWith('+ Create "') && cleanName.endsWith('"')) {
+        cleanName = cleanName.replace(/^\+ Create "/, "").replace(/"$/, "");
+      }
+
+      if (cleanName.trim().length === 0) {
+        ChatLib.chat(PREFIX + `§cCommand name cannot be empty!`);
+        return;
+      }
+
+      const existingCommand = this.cachedCommands.find(
+        (c) => c.name === cleanName
+      );
+      if (existingCommand) {
+        ChatLib.chat(PREFIX + `§cCommand "${cleanName}" already exists!`);
+        return;
+      }
+
+      ChatLib.chat(PREFIX + `§aCreating new command: "${cleanName}"`);
+      ChatLib.command(`command create ${cleanName}`);
+
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.filterText = "";
+        this.persistentFilterText = "";
+        this.updateFilteredCommands();
+      }
+    } else {
+      ChatLib.chat(PREFIX + `§cInvalid command name!`);
+    }
   }
 
   handleKeyPress(keyCode, char) {
@@ -1684,6 +2073,7 @@ class CommandsVisualCache {
 
     if (keyCode === 1) {
       // ESC
+      this.saveFilterText();
       this.hideOverlay();
       return true;
     } else if (keyCode === 200) {
@@ -1772,5 +2162,4 @@ class CommandsVisualCache {
   }
 }
 
-const commandsVisualCache = new CommandsVisualCache();
-export { commandsVisualCache };
+export const commandsVisualCache = new CommandsVisualCache();

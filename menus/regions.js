@@ -121,6 +121,7 @@ class RegionsVisualCache {
 
     this.filterTextField = null;
     this.initializeTextField = true;
+    this.persistentFilterText = "";
 
     this.keybindBlocker = null;
 
@@ -165,7 +166,12 @@ class RegionsVisualCache {
       dropdownHover: 0xff555555,
       deleteConfirmation: 0xff660000,
       deleteConfirmationHover: 0xff880000,
+      createButton: 0xff4caf50,
+      createButtonHover: 0xff45a049,
+      createButtonDisabled: 0xff666666,
     };
+
+    this.createButton = null;
 
     this.registerEvents();
   }
@@ -721,6 +727,7 @@ class RegionsVisualCache {
       clearTimeout(this.regionEditGUITimeout);
       this.regionEditGUITimeout = null;
     }
+    this.createButton = null;
 
     this.restoreAllKeybinds();
   }
@@ -1153,6 +1160,34 @@ class RegionsVisualCache {
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
+  saveFilterText() {
+    if (this.filterTextField) {
+      this.persistentFilterText = this.filterTextField.getText();
+    }
+  }
+
+  loadFilterText() {
+    return this.persistentFilterText;
+  }
+
+  getScannedPagesDisplay() {
+    if (this.totalPages === 999) {
+      return `(${this.scannedPages.size}/?)`;
+    } else if (this.totalPages === 0) {
+      return `(${this.scannedPages.size}/?)`;
+    } else {
+      return `(${this.scannedPages.size}/${this.totalPages})`;
+    }
+  }
+
+  areAllPagesScanned() {
+    if (this.scannedPages.size === 0) return false;
+    if (this.totalPages === 0 || this.totalPages === 999) {
+      return false;
+    }
+    return this.scannedPages.size >= this.totalPages;
+  }
+
   renderOverlay() {
     try {
       const panelDims = this.calculatePanelDimensions();
@@ -1175,8 +1210,9 @@ class RegionsVisualCache {
         this.initializeTextField = false;
 
         if (this.filterTextField) {
-          this.filterTextField.setText("");
-          this.filterText = "";
+          const savedFilterText = this.loadFilterText();
+          this.filterTextField.setText(savedFilterText);
+          this.filterText = savedFilterText;
           this.updateFilteredRegions();
         }
       }
@@ -1202,10 +1238,7 @@ class RegionsVisualCache {
       const placeholderCount = this.cachedRegions.filter(
         (r) => r.isPlaceholder
       ).length;
-      const scannedInfo =
-        this.totalPages === 999
-          ? `(${this.scannedPages.size}/?)`
-          : `(${this.scannedPages.size}/${this.totalPages})`;
+      const scannedInfo = this.getScannedPagesDisplay();
 
       let title = `${PREFIX}Regions (${this.cachedRegions.length}) ${scannedInfo}`;
       if (placeholderCount > 0) {
@@ -1221,11 +1254,65 @@ class RegionsVisualCache {
       currentY += 20;
 
       if (this.filterTextField) {
+        const filterText = this.filterTextField.getText();
+        const hasText = filterText && filterText.length > 0;
+        const filterFieldWidth = hasText ? panelWidth - 40 : panelWidth - 20;
+        this.filterTextField.setWidth(filterFieldWidth);
         this.filterTextField.render();
 
-        const currentText = this.filterTextField.getText();
-        if (currentText !== this.filterText) {
-          this.filterText = currentText;
+        if (hasText) {
+          const buttonSize = 20;
+          const buttonX = panelX + 10 + filterFieldWidth + 4;
+          const buttonY = currentY;
+          let mouseX = 0,
+            mouseY = 0;
+          try {
+            mouseX = Client.getMouseX();
+            mouseY = Client.getMouseY();
+          } catch (e) {}
+          const isHovered =
+            mouseX >= buttonX &&
+            mouseX <= buttonX + buttonSize &&
+            mouseY >= buttonY &&
+            mouseY <= buttonY + buttonSize;
+          const color = isHovered ? 0xffff5555 : 0xffff0000;
+          Renderer.drawRect(color, buttonX, buttonY, buttonSize, buttonSize);
+          Renderer.drawRect(0xff000000, buttonX, buttonY, buttonSize, 1);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX,
+            buttonY + buttonSize - 1,
+            buttonSize,
+            1
+          );
+          Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonSize);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX + buttonSize - 1,
+            buttonY,
+            1,
+            buttonSize
+          );
+          const xTextWidth = Renderer.getStringWidth("X");
+          Renderer.drawStringWithShadow(
+            "§fX",
+            buttonX + (buttonSize - xTextWidth) / 2,
+            buttonY + 4
+          );
+
+          this.clearFilterButton = {
+            x: buttonX,
+            y: buttonY,
+            width: buttonSize,
+            height: buttonSize,
+          };
+        } else {
+          this.clearFilterButton = null;
+        }
+
+        if (filterText !== this.filterText) {
+          this.filterText = filterText;
+          this.persistentFilterText = filterText;
           this.updateFilteredRegions();
         }
       }
@@ -1279,21 +1366,108 @@ class RegionsVisualCache {
 
     this.hoveredIndex = -1;
 
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(
-      startIndex + maxVisibleItems,
-      this.filteredRegions.length
-    );
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
 
+    // No results case
+    const shouldShowCreateButton =
+      this.filteredRegions.length === 0 && filterText.length > 0;
+    if (this.filteredRegions.length === 0) {
+      const noResultsText = "§7No regions match your search";
+      const noResultsWidth = Renderer.getStringWidth(noResultsText);
+      const noResultsX = panelX + (panelWidth - noResultsWidth) / 2;
+      const noResultsY = listStartY + 20;
+      Renderer.drawStringWithShadow(noResultsText, noResultsX, noResultsY);
+
+      // Draw separate create button
+      if (shouldShowCreateButton) {
+        const buttonY = listStartY + 50;
+        const buttonHeight = 25;
+        const buttonWidth = Math.min(250, panelWidth - 40);
+        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+
+        const isHovered =
+          mouseX >= buttonX &&
+          mouseX <= buttonX + buttonWidth &&
+          mouseY >= buttonY &&
+          mouseY <= buttonY + buttonHeight;
+
+        const buttonColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
+        const buttonText = `§f+ Create "${filterText}"`;
+
+        Renderer.drawRect(
+          buttonColor,
+          buttonX,
+          buttonY,
+          buttonWidth,
+          buttonHeight
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX,
+          buttonY + buttonHeight - 1,
+          buttonWidth,
+          1
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX + buttonWidth - 1,
+          buttonY,
+          1,
+          buttonHeight
+        );
+
+        const textWidth = Renderer.getStringWidth(buttonText);
+        const textX = buttonX + (buttonWidth - textWidth) / 2;
+        const textY = buttonY + (buttonHeight - 8) / 2;
+        Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+        this.createButton = {
+          x: buttonX,
+          y: buttonY,
+          width: buttonWidth,
+          height: buttonHeight,
+          regionName: filterText,
+          isDisabled: false,
+        };
+      } else {
+        this.createButton = null;
+      }
+
+      return;
+    }
+
+    this.createButton = null;
+
+    const listItems = [...this.filteredRegions];
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isPlaceholder: false,
+        ctItem: null,
+        hasCoords: false,
+        from: null,
+        to: null,
+        regionName: filterText,
+        isCreateItem: true,
+      });
+    }
+
+    const startIndex = this.scrollOffset;
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
     const visibleItemCount = endIndex - startIndex;
     const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
 
-    // Draw scrollbar if needed
-    if (this.filteredRegions.length > maxVisibleItems) {
+    // Draw scrollbar
+    if (listItems.length > maxVisibleItems) {
       const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredRegions.length - maxVisibleItems;
+      const maxScrollRange = listItems.length - maxVisibleItems;
       const scrollbarHeight = actualContentHeight;
-
       Renderer.drawRect(
         this.colors.scrollbar,
         scrollbarX,
@@ -1304,16 +1478,14 @@ class RegionsVisualCache {
 
       const thumbHeight = Math.max(
         10,
-        (maxVisibleItems / this.filteredRegions.length) * scrollbarHeight
+        (maxVisibleItems / listItems.length) * scrollbarHeight
       );
-
       const thumbY =
         maxScrollRange > 0
           ? listStartY +
             (this.scrollOffset / maxScrollRange) *
               (scrollbarHeight - thumbHeight)
           : listStartY;
-
       Renderer.drawRect(
         this.colors.scrollbarThumb,
         scrollbarX,
@@ -1323,9 +1495,9 @@ class RegionsVisualCache {
       );
     }
 
-    // Draw region items
+    // Draw list items including the last "create" item
     for (let i = startIndex; i < endIndex; i++) {
-      const region = this.filteredRegions[i];
+      const region = listItems[i];
       if (!region) continue;
 
       const listIndex = i - startIndex;
@@ -1338,30 +1510,27 @@ class RegionsVisualCache {
         mouseY >= itemY &&
         mouseY <= itemY + itemHeight;
 
-      if (isHovered) {
-        this.hoveredIndex = i;
-      }
+      if (isHovered) this.hoveredIndex = i;
 
       let bgColor = 0xff333333;
-      if (i === this.selectedIndex) {
-        bgColor = 0xff4caf50; // Green for selected
-      } else if (isHovered) {
-        bgColor = 0xff555555; // Lighter for hover
-      }
-
-      if (region.isPlaceholder) {
-        bgColor = region.isPlaceholder ? 0xff4a4a00 : bgColor;
+      if (i === this.selectedIndex) bgColor = 0xff4caf50;
+      else if (isHovered) bgColor = 0xff555555;
+      if (region.isPlaceholder) bgColor = 0xff4a4a00;
+      if (region.isCreateItem) {
+        bgColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
       }
 
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
-      // Draw region icon
+      // Draw icon
       try {
         if (region.ctItem) {
           const iconX = itemX + iconMargin;
           const iconY = itemY + (itemHeight - iconSize) / 2;
           region.ctItem.draw(iconX, iconY, 1.0);
-        } else {
+        } else if (!region.isCreateItem) {
           this.drawFallbackIcon(
             itemX + iconMargin,
             itemY + (itemHeight - iconSize) / 2,
@@ -1370,15 +1539,16 @@ class RegionsVisualCache {
           );
         }
       } catch (e) {
-        this.drawFallbackIcon(
-          itemX + iconMargin,
-          itemY + (itemHeight - iconSize) / 2,
-          iconSize,
-          region
-        );
+        if (!region.isCreateItem) {
+          this.drawFallbackIcon(
+            itemX + iconMargin,
+            itemY + (itemHeight - iconSize) / 2,
+            iconSize,
+            region
+          );
+        }
       }
 
-      // Check if region has coordinates
       const hasCoords =
         region.hasCoords &&
         region.from &&
@@ -1386,86 +1556,87 @@ class RegionsVisualCache {
         region.from !== "Unknown" &&
         region.to !== "Unknown";
 
-      // Draw region name
-      const textStartX = itemX + iconSize + iconMargin * 2;
-      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      let textStartX, availableTextWidth;
 
-      const nameColor =
-        i === this.selectedIndex
-          ? "§a"
-          : isHovered
-          ? "§e"
-          : region.isPlaceholder
-          ? "§6"
-          : "§f";
+      if (region.isCreateItem) {
+        textStartX = itemX;
+        availableTextWidth = listWidth;
+      } else {
+        textStartX = itemX + iconSize + iconMargin * 2;
+        availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      }
+
+      const nameColor = region.isCreateItem
+        ? "§f"
+        : i === this.selectedIndex
+        ? "§a"
+        : isHovered
+        ? "§e"
+        : region.isPlaceholder
+        ? "§6"
+        : "§f";
       const regionName = region.name || "Unknown Region";
 
-      const maxChars = Math.floor(availableTextWidth / 6) - 2;
-      const displayName =
-        regionName.length > maxChars
-          ? regionName.substring(0, maxChars - 3) + "..."
-          : regionName;
-
-      const finalDisplayName = region.isPlaceholder
-        ? displayName + " §8[NEW]"
-        : displayName;
-
-      if (hasCoords) {
+      if (region.isCreateItem) {
+        const textWidth = Renderer.getStringWidth(regionName);
+        const centerX = textStartX + (availableTextWidth - textWidth) / 2;
         Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          itemY + 2
+          nameColor + regionName,
+          centerX,
+          itemY + (itemHeight - 8) / 2
         );
       } else {
-        const nameY = itemY + (itemHeight - 8) / 2;
-        Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          nameY
-        );
-      }
+        const pageCounter = region.page ? `§8[P${region.page}]` : "";
+        const pageCounterWidth = region.page
+          ? Renderer.getStringWidth(`[P${region.page}]`)
+          : 0;
 
-      // Draw page number if multiple pages
-      if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${region.page}]`;
-        const pageWidth = Renderer.getStringWidth(pageText);
-        const pageHeight = 8;
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+        // Calculate available space for region name
+        const maxCharsForName =
+          Math.floor((availableTextWidth - pageCounterWidth - 10) / 6) - 2;
+        const displayName =
+          regionName.length > maxCharsForName
+            ? regionName.substring(0, maxCharsForName - 3) + "..."
+            : regionName;
 
-        Renderer.drawStringWithShadow(
-          pageText,
-          itemX + listWidth - pageWidth - 5,
-          pageY
-        );
-      }
+        const finalDisplayName = region.isPlaceholder
+          ? displayName + " §8[NEW]"
+          : displayName;
 
-      if (hasCoords) {
-        const formattedFrom = this.formatCoordinates(region.from);
-        const formattedTo = this.formatCoordinates(region.to);
-        const coordText = `§7${formattedFrom} → ${formattedTo}`;
+        if (hasCoords) {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + 2
+          );
+        } else {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + (itemHeight - 8) / 2
+          );
+        }
 
-        const maxCoordLength = Math.floor(availableTextWidth / 6);
-        const finalCoordText =
-          coordText.length > maxCoordLength
-            ? coordText.substring(0, maxCoordLength - 3) + "..."
-            : coordText;
+        if (region.page) {
+          const pageX = itemX + listWidth - pageCounterWidth - 5;
+          const pageY = itemY + (itemHeight - 8) / 2;
+          Renderer.drawStringWithShadow(pageCounter, pageX, pageY);
+        }
 
-        Renderer.drawStringWithShadow(finalCoordText, textStartX, itemY + 12);
-      } else {
-        const descText = region.isPlaceholder
-          ? "§8Newly created region - data not yet scanned"
-          : "§8No coordinates";
-        const maxDescLength = Math.floor(availableTextWidth / 6);
-        const finalDescText =
-          descText.length > maxDescLength
-            ? descText.substring(0, maxDescLength - 3) + "..."
-            : descText;
-
-        Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
+        if (hasCoords) {
+          const formattedFrom = this.formatCoordinates(region.from);
+          const formattedTo = this.formatCoordinates(region.to);
+          const coordText = `§7${formattedFrom} → ${formattedTo}`;
+          const maxCoordLength = Math.floor(availableTextWidth / 6);
+          const finalCoordText =
+            coordText.length > maxCoordLength
+              ? coordText.substring(0, maxCoordLength - 3) + "..."
+              : coordText;
+          Renderer.drawStringWithShadow(finalCoordText, textStartX, itemY + 12);
+        }
       }
     }
   }
-
   drawFallbackIcon(x, y, size, region) {
     let color = 0xff666666;
 
@@ -1588,6 +1759,45 @@ class RegionsVisualCache {
     }
 
     if (
+      this.clearFilterButton &&
+      button === 0 &&
+      mouseX >= this.clearFilterButton.x &&
+      mouseX <= this.clearFilterButton.x + this.clearFilterButton.width &&
+      mouseY >= this.clearFilterButton.y &&
+      mouseY <= this.clearFilterButton.y + this.clearFilterButton.height
+    ) {
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.persistentFilterText = "";
+        this.filterTextField.setIsFocused(false);
+        this.updateFilteredRegions();
+      }
+      return true;
+    }
+
+    // Handle create button when no results (default)
+    if (
+      button === 0 &&
+      this.createButton &&
+      mouseX >= this.createButton.x &&
+      mouseX <= this.createButton.x + this.createButton.width &&
+      mouseY >= this.createButton.y &&
+      mouseY <= this.createButton.y + this.createButton.height
+    ) {
+      if (!this.createButton.isDisabled) {
+        const regionName = this.createButton.regionName;
+        if (regionName && regionName.trim().length > 0) {
+          this.createRegion(regionName);
+        }
+      } else {
+        ChatLib.chat(
+          PREFIX + `§cPlease scan all pages before creating new regions!`
+        );
+      }
+      return true;
+    }
+
+    if (
       button === 0 &&
       this.autoScanButton &&
       mouseX >= this.autoScanButton.x &&
@@ -1607,19 +1817,95 @@ class RegionsVisualCache {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
-    if (
-      this.hoveredIndex >= 0 &&
-      this.hoveredIndex < this.filteredRegions.length
-    ) {
-      const region = this.filteredRegions[this.hoveredIndex];
-      this.selectedIndex = this.hoveredIndex;
+    let currentY = panelY + 10;
+    currentY += 20;
+    currentY += 30;
+    const listStartY = currentY;
 
-      if (button === 0) {
-        this.editRegion(region);
-        return true;
-      } else if (button === 1) {
-        this.showDropdown(region, mouseX, mouseY);
-        return true;
+    const itemHeight = 22;
+    const itemSpacing = 1;
+    const listWidth = panelWidth - 20;
+    const availableHeight = panelDims.height - 130;
+    const maxVisibleItems = Math.floor(
+      availableHeight / (itemHeight + itemSpacing)
+    );
+    const startIndex = this.scrollOffset;
+
+    let listItems = [...this.filteredRegions];
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
+
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isCreateItem: true,
+        regionName: filterText,
+      });
+    }
+
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const region = listItems[i];
+      if (!region) continue;
+
+      const listIndex = i - startIndex;
+      const itemX = panelX + 10;
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+
+      if (
+        mouseX >= itemX &&
+        mouseX <= itemX + listWidth &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight
+      ) {
+        if (region.isCreateItem) {
+          if (button === 0) {
+            const currentFilterText = this.filterTextField
+              ? this.filterTextField.getText().trim()
+              : "";
+
+            if (!currentFilterText || currentFilterText.length === 0) {
+              ChatLib.chat(PREFIX + `§cNo region name entered!`);
+              return true;
+            }
+
+            // Check if region already exists
+            const existingRegion = this.cachedRegions.find(
+              (r) => r.name === currentFilterText
+            );
+            if (existingRegion) {
+              ChatLib.chat(
+                PREFIX + `§cRegion "${currentFilterText}" already exists!`
+              );
+              return true;
+            }
+
+            ChatLib.chat(PREFIX + `§aCreating region: "${currentFilterText}"`);
+            ChatLib.command(`region create ${currentFilterText}`);
+
+            setTimeout(() => {
+              if (this.filterTextField) {
+                this.filterTextField.setText("");
+                this.filterText = "";
+                this.persistentFilterText = "";
+                this.updateFilteredRegions();
+              }
+            }, 100);
+
+            return true;
+          }
+          return true;
+        } else {
+          this.selectedIndex = i;
+          if (button === 0) {
+            this.editRegion(region);
+          } else if (button === 1) {
+            this.showDropdown(region, mouseX, mouseY);
+          }
+          return true;
+        }
       }
     }
 
@@ -1633,6 +1919,40 @@ class RegionsVisualCache {
     }
 
     return false;
+  }
+
+  createRegion(regionName) {
+    if (regionName && regionName.trim().length > 0) {
+      let cleanName = regionName;
+      if (cleanName.startsWith('+ Create "') && cleanName.endsWith('"')) {
+        cleanName = cleanName.replace(/^\+ Create "/, "").replace(/"$/, "");
+      }
+
+      if (cleanName.trim().length === 0) {
+        ChatLib.chat(PREFIX + `§cRegion name cannot be empty!`);
+        return;
+      }
+
+      const existingRegion = this.cachedRegions.find(
+        (r) => r.name === cleanName
+      );
+      if (existingRegion) {
+        ChatLib.chat(PREFIX + `§cRegion "${cleanName}" already exists!`);
+        return;
+      }
+
+      ChatLib.chat(PREFIX + `§aCreating new region: "${cleanName}"`);
+      ChatLib.command(`region create ${cleanName}`);
+
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.filterText = "";
+        this.persistentFilterText = "";
+        this.updateFilteredRegions();
+      }
+    } else {
+      ChatLib.chat(PREFIX + `§cInvalid region name!`);
+    }
   }
 
   handleKeyPress(keyCode, char) {
@@ -1791,5 +2111,4 @@ class RegionsVisualCache {
   }
 }
 
-const regionsVisualCache = new RegionsVisualCache();
-export { regionsVisualCache };
+export const regionsVisualCache = new RegionsVisualCache();

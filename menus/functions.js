@@ -107,7 +107,7 @@ class FunctionsVisualCache {
     this.selectedIndex = -1;
     this.scrollOffset = 0;
     this.currentWorld = null;
-    this.filterText = "";
+    this.filterText = this.persistentFilterText;
     this.showingFilter = false;
     this.scannedPages = new Set();
     this.totalPages = 0;
@@ -121,6 +121,7 @@ class FunctionsVisualCache {
 
     this.filterTextField = null;
     this.initializeTextField = true;
+    this.persistentFilterText = "";
 
     this.keybindBlocker = null;
 
@@ -165,6 +166,9 @@ class FunctionsVisualCache {
       dropdownHover: 0xff555555,
       deleteConfirmation: 0xff660000,
       deleteConfirmationHover: 0xff880000,
+      createButton: 0xff4caf50,
+      createButtonHover: 0xff45a049,
+      createButtonDisabled: 0xff666666,
     };
 
     this.registerEvents();
@@ -212,7 +216,7 @@ class FunctionsVisualCache {
     const itemHeight = 20;
     this.dropdown.height = this.dropdown.options.length * itemHeight;
 
-    let maxWidth = 80; 
+    let maxWidth = 80;
     this.dropdown.options.forEach((option) => {
       const textWidth = Renderer.getStringWidth(option.text) + 16;
       maxWidth = Math.max(maxWidth, textWidth);
@@ -305,7 +309,6 @@ class FunctionsVisualCache {
       Renderer.drawStringWithShadow(textColor + optionText, textX, textY);
     });
 
-    // Draw function name at the top (optional, for context)
     const headerText = `§7${this.dropdown.function.name}`;
     const headerWidth = Renderer.getStringWidth(headerText);
     if (headerWidth <= width - 16) {
@@ -578,7 +581,6 @@ class FunctionsVisualCache {
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
 
-    // Only validate if we're in the functions GUI
     const title = inventory.getName();
     const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
     const functionsRegex = /^\(\d+\/\d+\) Functions$|^Functions$/;
@@ -702,6 +704,7 @@ class FunctionsVisualCache {
       clearTimeout(this.functionEditGUITimeout);
       this.functionEditGUITimeout = null;
     }
+    this.createButton = null;
 
     this.restoreAllKeybinds();
   }
@@ -735,32 +738,51 @@ class FunctionsVisualCache {
     const nextPageItem = inventory.getStackInSlot(53);
     const previousPageItem = inventory.getStackInSlot(45);
 
-    if (nextPageItem && nextPageItem.getName() !== "Air") {
-      const lore = nextPageItem.getLore() || [];
-      const itemName = nextPageItem.getName() || "";
-
-      const linesToCheck = [...lore, itemName].filter(
-        (line) => line != null && line !== ""
-      );
-
-      for (const line of linesToCheck) {
-        try {
-          const cleanLine = line.replace(/§[0-9a-fk-or]/g, "");
-          const pagePattern = cleanLine.match(/(\d+)\/(\d+)/);
-          if (pagePattern) {
-            return parseInt(pagePattern[2]);
-          }
-        } catch (error) {
-          continue;
-        }
-      }
-
-      return 999;
-    } else {
+    if (
+      (!nextPageItem || nextPageItem.getName() === "Air") &&
+      (!previousPageItem || previousPageItem.getName() === "Air")
+    ) {
       return 1;
     }
-  }
 
+    let isPageOne = false;
+
+    function checkItem(item) {
+      if (!item || item.getName() === "Air") return null;
+
+      const lore = item.getLore() || [];
+      const itemName = item.getName() || "";
+      const linesToCheck = lore
+        .concat([itemName])
+        .filter((line) => line && line !== "");
+
+      for (let i = 0; i < linesToCheck.length; i++) {
+        try {
+          const cleanLine = linesToCheck[i].replace(/§[0-9a-fk-or]/g, "");
+          const match = cleanLine.match(/(\d+)\/(\d+)/);
+          if (match) {
+            const current = parseInt(match[1]);
+            const total = parseInt(match[2]);
+            if (current === 1) isPageOne = true;
+            return total;
+          }
+        } catch (e) {}
+      }
+      return null;
+    }
+
+    let totalPages = checkItem(nextPageItem) || checkItem(previousPageItem);
+
+    if (isPageOne) {
+      if (!nextPageItem || nextPageItem.getName() === "Air") {
+        return 1;
+      } else {
+        return 999;
+      }
+    }
+
+    return totalPages || 999;
+  }
   detectPageChange() {
     const inventory = Player.getOpenedInventory();
     if (!inventory) return;
@@ -776,7 +798,7 @@ class FunctionsVisualCache {
       if (newPage !== this.currentPage || newTotalPages !== this.totalPages) {
         this.currentPage = newPage;
 
-        if (this.totalPages === 999 || newTotalPages !== this.totalPages) {
+        if (newTotalPages > 0 && newTotalPages !== 999) {
           this.totalPages = newTotalPages;
         }
 
@@ -801,6 +823,7 @@ class FunctionsVisualCache {
     } else if (cleanTitle === "Functions") {
       if (this.currentPage !== 1) {
         this.currentPage = 1;
+        this.totalPages = this.detectTotalPages(inventory);
 
         if (!this.scannedPages.has(1)) {
           ChatLib.chat(PREFIX + `§eBack to page 1, scanning...`);
@@ -1145,6 +1168,33 @@ class FunctionsVisualCache {
     this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
   }
 
+  saveFilterText() {
+    if (this.filterTextField) {
+      this.persistentFilterText = this.filterTextField.getText();
+    }
+  }
+
+  loadFilterText() {
+    return this.persistentFilterText;
+  }
+
+  getScannedPagesDisplay() {
+    if (this.totalPages === 999) {
+      return `(${this.scannedPages.size}/?)`;
+    } else if (this.totalPages === 0) {
+      return `(${this.scannedPages.size}/?)`;
+    } else {
+      return `(${this.scannedPages.size}/${this.totalPages})`;
+    }
+  }
+
+  areAllPagesScanned() {
+    if (this.scannedPages.size === 0) return false;
+    if (this.totalPages === 0 || this.totalPages === 999) {
+      return false;
+    }
+    return this.scannedPages.size >= this.totalPages;
+  }
   renderOverlay() {
     try {
       const panelDims = this.calculatePanelDimensions();
@@ -1167,8 +1217,9 @@ class FunctionsVisualCache {
         this.initializeTextField = false;
 
         if (this.filterTextField) {
-          this.filterTextField.setText("");
-          this.filterText = "";
+          const savedFilterText = this.loadFilterText();
+          this.filterTextField.setText(savedFilterText);
+          this.filterText = savedFilterText;
           this.updateFilteredFunctions();
         }
       }
@@ -1196,16 +1247,9 @@ class FunctionsVisualCache {
       const placeholderCount = this.cachedFunctions.filter(
         (f) => f.isPlaceholder
       ).length;
-      const scannedInfo =
-        this.totalPages === 999
-          ? `(${this.scannedPages.size}/?)`
-          : `(${this.scannedPages.size}/${this.totalPages})`;
-
+      const scannedInfo = this.getScannedPagesDisplay();
       let title = `${PREFIX}Functions (${this.cachedFunctions.length}) ${scannedInfo}`;
-      if (placeholderCount > 0) {
-        title += ` §e[${placeholderCount} new]`;
-      }
-
+      if (placeholderCount > 0) title += ` §e[${placeholderCount} new]`;
       const titleWidth = Renderer.getStringWidth(title);
       Renderer.drawStringWithShadow(
         title,
@@ -1214,13 +1258,67 @@ class FunctionsVisualCache {
       );
       currentY += 20;
 
-      // Render filter text field
       if (this.filterTextField) {
+        const filterText = this.filterTextField.getText();
+        const hasText = filterText && filterText.length > 0;
+        const filterFieldWidth = hasText ? panelWidth - 40 : panelWidth - 20; // shrink if clear button
+        this.filterTextField.setWidth(filterFieldWidth);
         this.filterTextField.render();
 
-        const currentText = this.filterTextField.getText();
-        if (currentText !== this.filterText) {
-          this.filterText = currentText;
+        // Draw clear button if text exists
+        if (hasText) {
+          const buttonSize = 20;
+          const buttonX = panelX + 10 + filterFieldWidth + 4;
+          const buttonY = currentY;
+          let mouseX = 0,
+            mouseY = 0;
+          try {
+            mouseX = Client.getMouseX();
+            mouseY = Client.getMouseY();
+          } catch (e) {}
+          const isHovered =
+            mouseX >= buttonX &&
+            mouseX <= buttonX + buttonSize &&
+            mouseY >= buttonY &&
+            mouseY <= buttonY + buttonSize;
+          const color = isHovered ? 0xffff5555 : 0xffff0000;
+          Renderer.drawRect(color, buttonX, buttonY, buttonSize, buttonSize);
+          Renderer.drawRect(0xff000000, buttonX, buttonY, buttonSize, 1);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX,
+            buttonY + buttonSize - 1,
+            buttonSize,
+            1
+          );
+          Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonSize);
+          Renderer.drawRect(
+            0xff000000,
+            buttonX + buttonSize - 1,
+            buttonY,
+            1,
+            buttonSize
+          );
+          const xTextWidth = Renderer.getStringWidth("X");
+          Renderer.drawStringWithShadow(
+            "§fX",
+            buttonX + (buttonSize - xTextWidth) / 2,
+            buttonY + 4
+          );
+
+          this.clearFilterButton = {
+            x: buttonX,
+            y: buttonY,
+            width: buttonSize,
+            height: buttonSize,
+          };
+        } else {
+          this.clearFilterButton = null;
+        }
+
+        if (filterText !== this.filterText) {
+          this.filterText = filterText;
+          this.persistentFilterText = filterText;
           this.updateFilteredFunctions();
         }
       }
@@ -1273,21 +1371,107 @@ class FunctionsVisualCache {
 
     this.hoveredIndex = -1;
 
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(
-      startIndex + maxVisibleItems,
-      this.filteredFunctions.length
-    );
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
 
+    // No results case
+    const shouldShowCreateButton =
+      this.filteredFunctions.length === 0 && filterText.length > 0;
+    if (this.filteredFunctions.length === 0) {
+      const noResultsText = "§7No functions match your search";
+      const noResultsWidth = Renderer.getStringWidth(noResultsText);
+      const noResultsX = panelX + (panelWidth - noResultsWidth) / 2;
+      const noResultsY = listStartY + 20;
+      Renderer.drawStringWithShadow(noResultsText, noResultsX, noResultsY);
+
+      // Draw separate create button
+      if (shouldShowCreateButton) {
+        const buttonY = listStartY + 50;
+        const buttonHeight = 25;
+        const buttonWidth = Math.min(250, panelWidth - 40);
+        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+
+        const isHovered =
+          mouseX >= buttonX &&
+          mouseX <= buttonX + buttonWidth &&
+          mouseY >= buttonY &&
+          mouseY <= buttonY + buttonHeight;
+
+        const buttonColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
+        const buttonText = `§f+ Create "${filterText}"`;
+
+        Renderer.drawRect(
+          buttonColor,
+          buttonX,
+          buttonY,
+          buttonWidth,
+          buttonHeight
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX,
+          buttonY + buttonHeight - 1,
+          buttonWidth,
+          1
+        );
+        Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
+        Renderer.drawRect(
+          0xff000000,
+          buttonX + buttonWidth - 1,
+          buttonY,
+          1,
+          buttonHeight
+        );
+
+        const textWidth = Renderer.getStringWidth(buttonText);
+        const textX = buttonX + (buttonWidth - textWidth) / 2;
+        const textY = buttonY + (buttonHeight - 8) / 2;
+        Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+        this.createButton = {
+          x: buttonX,
+          y: buttonY,
+          width: buttonWidth,
+          height: buttonHeight,
+          functionName: filterText,
+          isDisabled: false,
+        };
+      } else {
+        this.createButton = null;
+      }
+
+      return;
+    }
+
+    this.createButton = null;
+
+    const listItems = [...this.filteredFunctions];
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isPlaceholder: false,
+        ctItem: null,
+        hasDescription: false,
+        description: null,
+        functionName: filterText,
+        isCreateItem: true,
+      });
+    }
+
+    const startIndex = this.scrollOffset;
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
     const visibleItemCount = endIndex - startIndex;
     const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
 
-    // Draw scrollbar if needed
-    if (this.filteredFunctions.length > maxVisibleItems) {
+    // Draw scrollbar
+    if (listItems.length > maxVisibleItems) {
       const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = this.filteredFunctions.length - maxVisibleItems;
+      const maxScrollRange = listItems.length - maxVisibleItems;
       const scrollbarHeight = actualContentHeight;
-
       Renderer.drawRect(
         this.colors.scrollbar,
         scrollbarX,
@@ -1298,16 +1482,14 @@ class FunctionsVisualCache {
 
       const thumbHeight = Math.max(
         10,
-        (maxVisibleItems / this.filteredFunctions.length) * scrollbarHeight
+        (maxVisibleItems / listItems.length) * scrollbarHeight
       );
-
       const thumbY =
         maxScrollRange > 0
           ? listStartY +
             (this.scrollOffset / maxScrollRange) *
               (scrollbarHeight - thumbHeight)
           : listStartY;
-
       Renderer.drawRect(
         this.colors.scrollbarThumb,
         scrollbarX,
@@ -1317,9 +1499,8 @@ class FunctionsVisualCache {
       );
     }
 
-    // Draw function items
     for (let i = startIndex; i < endIndex; i++) {
-      const func = this.filteredFunctions[i];
+      const func = listItems[i];
       if (!func) continue;
 
       const listIndex = i - startIndex;
@@ -1332,30 +1513,26 @@ class FunctionsVisualCache {
         mouseY >= itemY &&
         mouseY <= itemY + itemHeight;
 
-      if (isHovered) {
-        this.hoveredIndex = i;
-      }
+      if (isHovered) this.hoveredIndex = i;
 
       let bgColor = 0xff333333;
-      if (i === this.selectedIndex) {
-        bgColor = 0xff4caf50; // Green for selected
-      } else if (isHovered) {
-        bgColor = 0xff555555; // Lighter for hover
-      }
-
-      if (func.isPlaceholder) {
-        bgColor = func.isPlaceholder ? 0xff4a4a00 : bgColor;
+      if (i === this.selectedIndex) bgColor = 0xff4caf50;
+      else if (isHovered) bgColor = 0xff555555;
+      if (func.isPlaceholder) bgColor = 0xff4a4a00;
+      if (func.isCreateItem) {
+        bgColor = isHovered
+          ? this.colors.createButtonHover
+          : this.colors.createButton;
       }
 
       Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
 
-      // Draw function icon
       try {
         if (func.ctItem) {
           const iconX = itemX + iconMargin;
           const iconY = itemY + (itemHeight - iconSize) / 2;
           func.ctItem.draw(iconX, iconY, 1.0);
-        } else {
+        } else if (!func.isCreateItem) {
           this.drawFallbackIcon(
             itemX + iconMargin,
             itemY + (itemHeight - iconSize) / 2,
@@ -1364,12 +1541,14 @@ class FunctionsVisualCache {
           );
         }
       } catch (e) {
-        this.drawFallbackIcon(
-          itemX + iconMargin,
-          itemY + (itemHeight - iconSize) / 2,
-          iconSize,
-          func
-        );
+        if (!func.isCreateItem) {
+          this.drawFallbackIcon(
+            itemX + iconMargin,
+            itemY + (itemHeight - iconSize) / 2,
+            iconSize,
+            func
+          );
+        }
       }
 
       const hasDescription =
@@ -1377,75 +1556,88 @@ class FunctionsVisualCache {
         (func.description ||
           (func.descriptions && func.descriptions.length > 0));
 
-      const textStartX = itemX + iconSize + iconMargin * 2;
-      const availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      let textStartX, availableTextWidth;
 
-      const nameColor =
-        i === this.selectedIndex
-          ? "§a"
-          : isHovered
-          ? "§e"
-          : func.isPlaceholder
-          ? "§6"
-          : "§f";
+      if (func.isCreateItem) {
+        textStartX = itemX;
+        availableTextWidth = listWidth;
+      } else {
+        textStartX = itemX + iconSize + iconMargin * 2;
+        availableTextWidth = listWidth - iconSize - iconMargin * 3;
+      }
+
+      const nameColor = func.isCreateItem
+        ? "§f"
+        : i === this.selectedIndex
+        ? "§a"
+        : isHovered
+        ? "§e"
+        : func.isPlaceholder
+        ? "§6"
+        : "§f";
       const functionName = func.name || "Unknown Function";
 
-      const maxChars = Math.floor(availableTextWidth / 6) - 2;
-      const displayName =
-        functionName.length > maxChars
-          ? functionName.substring(0, maxChars - 3) + "..."
-          : functionName;
-
-      const finalDisplayName = func.isPlaceholder
-        ? displayName + " §8[NEW]"
-        : displayName;
-
-      if (hasDescription) {
+      if (func.isCreateItem) {
+        const textWidth = Renderer.getStringWidth(functionName);
+        const centerX = textStartX + (availableTextWidth - textWidth) / 2;
         Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          itemY + 2
+          nameColor + functionName,
+          centerX,
+          itemY + (itemHeight - 8) / 2
         );
       } else {
-        const nameY = itemY + (itemHeight - 8) / 2;
-        Renderer.drawStringWithShadow(
-          nameColor + finalDisplayName,
-          textStartX,
-          nameY
-        );
-      }
+        const pageCounter = func.page ? `§8[P${func.page}]` : "";
+        const pageCounterWidth = func.page
+          ? Renderer.getStringWidth(`[P${func.page}]`)
+          : 0;
 
-      // Draw page number if multiple pages
-      if (this.totalPages > 1 && panelWidth > 250) {
-        const pageText = `§8[P${func.page}]`;
-        const pageWidth = Renderer.getStringWidth(pageText);
-        const pageHeight = 8;
-        const pageY = itemY + itemHeight / 2 - pageHeight / 2;
+        const maxCharsForName =
+          Math.floor((availableTextWidth - pageCounterWidth - 10) / 6) - 2;
+        const displayName =
+          functionName.length > maxCharsForName
+            ? functionName.substring(0, maxCharsForName - 3) + "..."
+            : functionName;
 
-        Renderer.drawStringWithShadow(
-          pageText,
-          itemX + listWidth - pageWidth - 5,
-          pageY
-        );
-      }
+        const finalDisplayName = func.isPlaceholder
+          ? displayName + " §8[NEW]"
+          : displayName;
 
-      if (hasDescription) {
-        let descriptionText = "";
-        if (func.description) {
-          descriptionText = func.description;
-        } else if (func.descriptions && func.descriptions.length > 0) {
-          descriptionText = func.descriptions[0];
+        if (hasDescription) {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + 2
+          );
+        } else {
+          Renderer.drawStringWithShadow(
+            nameColor + finalDisplayName,
+            textStartX,
+            itemY + (itemHeight - 8) / 2
+          );
         }
 
-        if (descriptionText) {
-          const descText = `§7${descriptionText}`;
-          const maxDescLength = Math.floor(availableTextWidth / 6);
-          const finalDescText =
-            descText.length > maxDescLength
-              ? descText.substring(0, maxDescLength - 3) + "..."
-              : descText;
+        if (func.page) {
+          const pageX = itemX + listWidth - pageCounterWidth - 5;
+          const pageY = itemY + (itemHeight - 8) / 2;
+          Renderer.drawStringWithShadow(pageCounter, pageX, pageY);
+        }
 
-          Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12);
+        if (hasDescription) {
+          let descriptionText =
+            func.description || (func.descriptions && func.descriptions[0]);
+          if (descriptionText) {
+            const descText = `§7${descriptionText}`;
+            const maxDescLength = Math.floor(availableTextWidth / 6);
+            const finalDescText =
+              descText.length > maxDescLength
+                ? descText.substring(0, maxDescLength - 3) + "..."
+                : descText;
+            Renderer.drawStringWithShadow(
+              finalDescText,
+              textStartX,
+              itemY + 12
+            );
+          }
         }
       }
     }
@@ -1485,6 +1677,78 @@ class FunctionsVisualCache {
       const centerY = y + (size - 8) / 2;
       Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
     }
+  }
+
+  drawCreateButton(panelX, buttonY, panelWidth, functionName) {
+    const buttonHeight = 25;
+    const buttonWidth = Math.min(250, panelWidth - 40);
+    const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+
+    let mouseX, mouseY;
+    try {
+      mouseX = Client.getMouseX();
+      mouseY = Client.getMouseY();
+    } catch (e) {
+      mouseX = 0;
+      mouseY = 0;
+    }
+
+    const isHovered =
+      mouseX >= buttonX &&
+      mouseX <= buttonX + buttonWidth &&
+      mouseY >= buttonY &&
+      mouseY <= buttonY + buttonHeight;
+
+    const allPagesScanned = this.areAllPagesScanned();
+    const isDisabled = !allPagesScanned;
+
+    let buttonColor;
+    let buttonText;
+
+    if (isDisabled) {
+      buttonColor = this.colors.createButtonDisabled;
+      buttonText = `§7(SCAN ALL PAGES FIRST)`;
+    } else {
+      buttonColor = isHovered
+        ? this.colors.createButtonHover
+        : this.colors.createButton;
+      buttonText = `§f+ Create "${functionName}"`;
+    }
+
+    // Draw button background
+    Renderer.drawRect(buttonColor, buttonX, buttonY, buttonWidth, buttonHeight);
+
+    // Draw button border
+    Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1); // top
+    Renderer.drawRect(
+      0xff000000,
+      buttonX,
+      buttonY + buttonHeight - 1,
+      buttonWidth,
+      1
+    ); // bottom
+    Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight); // left
+    Renderer.drawRect(
+      0xff000000,
+      buttonX + buttonWidth - 1,
+      buttonY,
+      1,
+      buttonHeight
+    ); // right
+
+    const textWidth = Renderer.getStringWidth(buttonText);
+    const textX = buttonX + (buttonWidth - textWidth) / 2;
+    const textY = buttonY + (buttonHeight - 8) / 2;
+    Renderer.drawStringWithShadow(buttonText, textX, textY);
+
+    this.createButton = {
+      x: buttonX,
+      y: buttonY,
+      width: buttonWidth,
+      height: buttonHeight,
+      functionName: functionName,
+      isDisabled: isDisabled,
+    };
   }
 
   drawAutoScanButton(panelX, buttonY, panelWidth) {
@@ -1608,10 +1872,53 @@ class FunctionsVisualCache {
     if (!this.isActive) return false;
 
     const panelDims = this.calculatePanelDimensions();
-    const { width: panelWidth, x: panelX, y: panelY } = panelDims;
+    const {
+      width: panelWidth,
+      height: panelHeight,
+      x: panelX,
+      y: panelY,
+    } = panelDims;
+
+    if (
+      this.clearFilterButton &&
+      button === 0 &&
+      mouseX >= this.clearFilterButton.x &&
+      mouseX <= this.clearFilterButton.x + this.clearFilterButton.width &&
+      mouseY >= this.clearFilterButton.y &&
+      mouseY <= this.clearFilterButton.y + this.clearFilterButton.height
+    ) {
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.persistentFilterText = "";
+        this.filterTextField.setIsFocused(false);
+        this.updateFilteredFunctions();
+      }
+      return true;
+    }
 
     if (this.dropdown.isVisible) {
       return this.handleDropdownClick(mouseX, mouseY);
+    }
+
+    if (
+      button === 0 &&
+      this.createButton &&
+      mouseX >= this.createButton.x &&
+      mouseX <= this.createButton.x + this.createButton.width &&
+      mouseY >= this.createButton.y &&
+      mouseY <= this.createButton.y + this.createButton.height
+    ) {
+      if (!this.createButton.isDisabled) {
+        const functionName = this.createButton.functionName;
+        if (functionName && functionName.trim().length > 0) {
+          this.createFunction(functionName);
+        }
+      } else {
+        ChatLib.chat(
+          PREFIX + `§cPlease scan all pages before creating new functions!`
+        );
+      }
+      return true;
     }
 
     if (
@@ -1634,21 +1941,96 @@ class FunctionsVisualCache {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
-    if (
-      this.hoveredIndex >= 0 &&
-      this.hoveredIndex < this.filteredFunctions.length
-    ) {
-      const func = this.filteredFunctions[this.hoveredIndex];
-      this.selectedIndex = this.hoveredIndex;
+    let currentY = panelY + 10;
+    currentY += 20;
+    currentY += 30;
+    const listStartY = currentY;
 
-      if (button === 0) {
-        // Left click - edit function
-        this.editFunction(func);
-        return true;
-      } else if (button === 1) {
-        // Right click - show dropdown
-        this.showDropdown(func, mouseX, mouseY);
-        return true;
+    const itemHeight = 22;
+    const itemSpacing = 1;
+    const listWidth = panelWidth - 20;
+    const availableHeight = panelHeight - 130;
+    const maxVisibleItems = Math.floor(
+      availableHeight / (itemHeight + itemSpacing)
+    );
+    const startIndex = this.scrollOffset;
+
+    let listItems = [...this.filteredFunctions];
+    const filterText = this.filterTextField
+      ? this.filterTextField.getText().trim()
+      : "";
+
+    if (filterText.length > 0) {
+      listItems.push({
+        name: `+ Create "${filterText}"`,
+        isCreateItem: true,
+        functionName: filterText,
+      });
+    }
+
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
+
+    for (let i = startIndex; i < endIndex; i++) {
+      const func = listItems[i];
+      if (!func) continue;
+
+      const listIndex = i - startIndex;
+      const itemX = panelX + 10;
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+
+      if (
+        mouseX >= itemX &&
+        mouseX <= itemX + listWidth &&
+        mouseY >= itemY &&
+        mouseY <= itemY + itemHeight
+      ) {
+        if (func.isCreateItem) {
+          if (button === 0) {
+            const currentFilterText = this.filterTextField
+              ? this.filterTextField.getText().trim()
+              : "";
+
+            if (!currentFilterText || currentFilterText.length === 0) {
+              ChatLib.chat(PREFIX + `§cNo function name entered!`);
+              return true;
+            }
+
+            const existingFunction = this.cachedFunctions.find(
+              (f) => f.name === currentFilterText
+            );
+            if (existingFunction) {
+              ChatLib.chat(
+                PREFIX + `§cFunction "${currentFilterText}" already exists!`
+              );
+              return true;
+            }
+
+            ChatLib.chat(
+              PREFIX + `§aCreating function: "${currentFilterText}"`
+            );
+            ChatLib.command(`function create ${currentFilterText}`);
+
+            setTimeout(() => {
+              if (this.filterTextField) {
+                this.filterTextField.setText("");
+                this.filterText = "";
+                this.persistentFilterText = "";
+                this.updateFilteredFunctions();
+              }
+            }, 100);
+
+            return true;
+          }
+          return true;
+        } else {
+          this.selectedIndex = i;
+          if (button === 0) {
+            this.editFunction(func);
+          } else if (button === 1) {
+            this.showDropdown(func, mouseX, mouseY);
+          }
+          return true;
+        }
       }
     }
 
@@ -1656,12 +2038,46 @@ class FunctionsVisualCache {
       mouseX >= panelX &&
       mouseX <= panelX + panelWidth &&
       mouseY >= panelY &&
-      mouseY <= panelY + panelDims.height
+      mouseY <= panelY + panelHeight
     ) {
       return true;
     }
 
     return false;
+  }
+
+  createFunction(functionName) {
+    if (functionName && functionName.trim().length > 0) {
+      let cleanName = functionName;
+      if (cleanName.startsWith('+ Create "') && cleanName.endsWith('"')) {
+        cleanName = cleanName.replace(/^\+ Create "/, "").replace(/"$/, "");
+      }
+
+      if (cleanName.trim().length === 0) {
+        ChatLib.chat(PREFIX + `§cFunction name cannot be empty!`);
+        return;
+      }
+
+      const existingFunction = this.cachedFunctions.find(
+        (f) => f.name === cleanName
+      );
+      if (existingFunction) {
+        ChatLib.chat(PREFIX + `§cFunction "${cleanName}" already exists!`);
+        return;
+      }
+
+      ChatLib.chat(PREFIX + `§aCreating new function: "${cleanName}"`);
+      ChatLib.command(`function create ${cleanName}`);
+
+      if (this.filterTextField) {
+        this.filterTextField.setText("");
+        this.filterText = "";
+        this.persistentFilterText = "";
+        this.updateFilteredFunctions();
+      }
+    } else {
+      ChatLib.chat(PREFIX + `§cInvalid function name!`);
+    }
   }
 
   handleKeyPress(keyCode, char) {
@@ -1822,5 +2238,4 @@ class FunctionsVisualCache {
   }
 }
 
-const functionsVisualCache = new FunctionsVisualCache();
-export { functionsVisualCache };
+export const functionsVisualCache = new FunctionsVisualCache();
