@@ -57,23 +57,32 @@ try {
 const LATEST_VERSION_URL =
   "https://raw.githubusercontent.com/terraidk/terraidk-qol/main/metadata.json";
 
-// Delay load message by 0.5 second (500 milliseconds)
-setTimeout(() => {
-  ChatLib.chat(
-    new TextComponent(
-      PREFIX +
-        "&f" +
-        LOCAL_VERSION +
-        " Loaded successfully. | " +
-        "&b&nChangelog"
-    )
-      .setClick(
-        "open_url",
-        "https://github.com/terraidk/terraidk-qol/releases/v" + LOCAL_VERSION
-      )
-      .setHover("show_text", "&fClick to view &aTQoL&f on &9&lGitHub")
-  );
-}, 500);
+let hasShownLoadMessage = false;
+
+register("worldLoad", () => {
+  if (!hasShownLoadMessage) {
+    hasShownLoadMessage = true;
+
+    setTimeout(() => {
+      ChatLib.chat(
+        new TextComponent(
+          PREFIX +
+            "&f" +
+            LOCAL_VERSION +
+            " Loaded successfully. | " +
+            "&b&nChangelog"
+        )
+          .setClick(
+            "open_url",
+            "https://github.com/terraidk/terraidk-qol/releases/v" +
+              LOCAL_VERSION
+          )
+          .setHover("show_text", "&fClick to view &aTQoL&f on &9&lGitHub")
+      );
+      checkForUpdate();
+    }, 500);
+  }
+});
 
 function checkForUpdate() {
   new Thread(() => {
@@ -86,10 +95,14 @@ function checkForUpdate() {
       }
 
       if (latestVersion && latestVersion !== LOCAL_VERSION) {
-        Client.scheduleTask(() =>
+        Client.scheduleTask(
+          () => ChatLib.chat("&f"),
+          ChatLib.chat("&f"),
+
           ChatLib.chat(
             new TextComponent(
-              "&cA new version of &aTQoL&c is available! &7[&eClick to update&7]"
+              PREFIX +
+                "&cA new version of &aTQoL&c is available! &7[&eClick to update&7]"
             )
               .setClick(
                 "open_url",
@@ -102,10 +115,10 @@ function checkForUpdate() {
                   "\n&7Latest: &a" +
                   latestVersion
               )
-          )
+          ),
+          ChatLib.chat("&f")
         );
       }
     } catch (e) {}
   }).start();
 }
-setTimeout(checkForUpdate, 2000);
