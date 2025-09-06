@@ -12,11 +12,13 @@ import "./menus/functions";
 import "./menus/custommenus";
 import "./menus/commands";
 
+import "./discordRPC/discordRPC";
+
 import { PREFIX } from "./utils/constants";
 
 const File = Java.type("java.io.File");
 
-function getModuleFolder() {
+export function getModuleFolder() {
   const modulesDir = new File("config/ChatTriggers/modules/");
   const folders = modulesDir.listFiles();
   for (let i = 0; i < folders.length; i++) {
@@ -54,10 +56,15 @@ try {
   }
 } catch (e) {}
 
+export function getLocalVersion() {
+  return LOCAL_VERSION;
+}
+
 const LATEST_VERSION_URL =
   "https://raw.githubusercontent.com/terraidk/terraidk-qol/main/metadata.json";
 
 let hasShownLoadMessage = false;
+let hasCheckedForUpdate = false;
 
 register("worldLoad", () => {
   if (!hasShownLoadMessage) {
@@ -79,9 +86,19 @@ register("worldLoad", () => {
           )
           .setHover("show_text", "&fClick to view &aTQoL&f on &9&lGitHub")
       );
-      checkForUpdate();
+
+      if (!hasCheckedForUpdate) {
+        console.log("Running update check for first time");
+        hasCheckedForUpdate = true;
+        checkForUpdate();
+      }
     }, 500);
   }
+});
+
+register("gameLoad", () => {
+  hasShownLoadMessage = false;
+  hasCheckedForUpdate = false;
 });
 
 function checkForUpdate() {
@@ -95,10 +112,8 @@ function checkForUpdate() {
       }
 
       if (latestVersion && latestVersion !== LOCAL_VERSION) {
-        Client.scheduleTask(
-          () => ChatLib.chat("&f"),
-          ChatLib.chat("&f"),
-
+        Client.scheduleTask(() => {
+          ChatLib.chat("&f");
           ChatLib.chat(
             new TextComponent(
               PREFIX +
@@ -111,13 +126,13 @@ function checkForUpdate() {
               .setHover(
                 "show_text",
                 "&aClick to download the latest version\n&7Current: &c" +
-                  LOCAL_VERSION +
+                  getLocalVersion() +
                   "\n&7Latest: &a" +
                   latestVersion
               )
-          ),
-          ChatLib.chat("&f")
-        );
+          );
+          ChatLib.chat("&f");
+        });
       }
     } catch (e) {}
   }).start();

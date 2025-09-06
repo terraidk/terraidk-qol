@@ -1423,7 +1423,7 @@ class CommandsVisualCache {
         this.createButton = null;
       }
 
-      return; 
+      return;
     }
 
     this.createButton = null;
@@ -1867,15 +1867,15 @@ class CommandsVisualCache {
       this.filterTextField.mouseClicked(mouseX, mouseY, button);
     }
 
-    let currentY = panelY + 10; 
-    currentY += 20; 
-    currentY += 30; 
-    const listStartY = currentY; 
+    let currentY = panelY + 10;
+    currentY += 20;
+    currentY += 30;
+    const listStartY = currentY;
 
     const itemHeight = 22;
     const itemSpacing = 1;
     const listWidth = panelWidth - 20;
-    const availableHeight = panelHeight - 130; 
+    const availableHeight = panelHeight - 130;
     const maxVisibleItems = Math.floor(
       availableHeight / (itemHeight + itemSpacing)
     );
