@@ -6,15 +6,79 @@ import config from '../utils/command_config.js'
 function getEnabledCommands() {
   const commands = []
 
-  if (config.enablePartyTransfer) commands.push('&a/pt <player> &7- Transfer party to player')
-  if (config.enablePartyDisband) commands.push('&a/pd &7- Disband party')
-  if (config.enableLobbyHousing) commands.push('&a/lh &7- Go to housing lobby')
-  if (config.enableParkourCheckpoint) commands.push('&a/pcp &7- Go to parkour checkpoint')
-  if (config.enablePartyWarp) commands.push('&a/pw &7- Party warp')
-  if (config.enableVariables) commands.push('&a/var <global|playername> <list|inc|dec|set|unset> <var> [value]')
-  if (config.enableSelfVariables) commands.push('&a/selfvar <list|inc|dec|set|unset> <var> [value] &7- Manage your own variables')
-  if (config.enableReminders) commands.push('&a/remind <1h 20m | HH:MM[am/pm]> <message> &7- Set a reminder')
-  if (config.enableReminderList) commands.push('&a/reminders &7- View/edit/delete reminders')
+  if (config.enablePartyTransfer) {
+    commands.push({
+      category: 'Party',
+      syntax: '/pt <player>',
+      description: 'Short for /party transfer',
+    })
+  }
+
+  if (config.enablePartyDisband) {
+    commands.push({
+      category: 'Party',
+      syntax: '/pd',
+      description: 'Short for /party disband',
+    })
+  }
+
+  if (config.enablePartyWarp) {
+    commands.push({
+      category: 'Party',
+      syntax: '/pw',
+      description: 'Short for /party warp',
+    })
+  }
+
+  if (config.enableLobbyHousing) {
+    commands.push({
+      category: 'Navigation',
+      syntax: '/lh',
+      description: 'Short for /lobby housing',
+    })
+  }
+
+  if (config.enableParkourCheckpoint) {
+    commands.push({
+      category: 'Navigation',
+      syntax: '/pcp',
+      description: 'Short for /parkour checkpoint',
+    })
+  }
+
+  if (config.enableVariables) {
+    commands.push({
+      category: 'Variables',
+      syntax: '/var <global|playername> <list|inc|dec|set|unset> <var> [value]',
+      description: 'Manage variables with a more intuitive syntax',
+    })
+  }
+
+  if (config.enableSelfVariables) {
+    commands.push({
+      category: 'Variables',
+      syntax: '/selfvar <list|inc|dec|set|unset> <var> [value]',
+      description: 'Manage your own variables',
+    })
+  }
+
+  if (config.enableReminders) {
+    commands.push({
+      category: 'Reminders',
+      syntax: '/remind <1h 20m | HH:MM[am/pm]> <message>',
+      description: 'Set a reminder',
+    })
+  }
+
+  if (config.enableReminderList) {
+    commands.push({
+      category: 'Reminders',
+      syntax: '/reminders',
+      description: 'View, edit, or delete reminders',
+    })
+  }
+
+  // add more commands here...
 
   return commands
 }
@@ -36,13 +100,15 @@ register('command', (command, ...args) => {
 
   const COMMAND_LIST = getEnabledCommands()
   let filter = args.join(' ').toLowerCase()
-  const filtered = filter ? COMMAND_LIST.filter(cmd => cmd.toLowerCase().includes(filter)) : COMMAND_LIST
+  const filtered = filter ? COMMAND_LIST.filter(cmd => cmd.syntax.toLowerCase().includes(filter)) : COMMAND_LIST
 
   ChatLib.chat('&8&m----------------&r ' + "&9[&aterraidk's QoL&r&9]&r " + '&8&m----------------')
-  filtered.forEach(cmd => ChatLib.chat(cmd))
+  filtered.forEach(cmd => ChatLib.chat('&a' + cmd.syntax + ' &7 ' + cmd.description))
 
-  ChatLib.chat('\n&b/tqol help [filter] &7- View more or filter')
-  ChatLib.chat('&b/tqol config &7- Enable/disable commands')
+  // todo: sort on category and print by category
+
+  ChatLib.chat('\n&b/tqol help [filter] &7 View more or filter')
+  ChatLib.chat('&b/tqol config &7 Enable/disable commands')
   ChatLib.chat('&8&m-----------------------------------------------')
 })
   .setName('tqol')
