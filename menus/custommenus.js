@@ -1,133 +1,123 @@
 /// <reference types="../CTAutocomplete" />
 
-import { PREFIX } from "../utils/constants";
-importPackage(Packages.org.lwjgl.input);
+import { PREFIX } from '../utils/constants'
+importPackage(Packages.org.lwjgl.input)
 
-if (typeof GuiScreen === "undefined") {
-  var GuiScreen = Java.type("net.minecraft.client.gui.GuiScreen");
+if (typeof GuiScreen === 'undefined') {
+  var GuiScreen = Java.type('net.minecraft.client.gui.GuiScreen')
 }
-if (typeof Player === "undefined") {
-  var Player = Java.type("com.chattriggers.ctjs.minecraft.wrappers.Player");
+if (typeof Player === 'undefined') {
+  var Player = Java.type('com.chattriggers.ctjs.minecraft.wrappers.Player')
 }
-if (typeof GuiTextField === "undefined") {
-  var GuiTextField = Java.type("net.minecraft.client.gui.GuiTextField");
+if (typeof GuiTextField === 'undefined') {
+  var GuiTextField = Java.type('net.minecraft.client.gui.GuiTextField')
 }
 
 class Input {
   constructor(x, y, width, height) {
-    const GuiTextField = Java.type("net.minecraft.client.gui.GuiTextField");
-    this.mcObject = new GuiTextField(
-      0,
-      Client.getMinecraft().field_71466_p,
-      x,
-      y,
-      width,
-      height
-    );
+    const GuiTextField = Java.type('net.minecraft.client.gui.GuiTextField')
+    this.mcObject = new GuiTextField(0, Client.getMinecraft().field_71466_p, x, y, width, height)
 
     this.getX = () => {
-      return this.mcObject.field_146209_f;
-    };
+      return this.mcObject.field_146209_f
+    }
     this.getY = () => {
-      return this.mcObject.field_146210_g;
-    };
+      return this.mcObject.field_146210_g
+    }
     this.getWidth = () => {
-      return this.mcObject.field_146218_h;
-    };
+      return this.mcObject.field_146218_h
+    }
     this.getHeight = () => {
-      return this.mcObject.field_146219_i;
-    };
-    this.setX = (x) => {
-      this.mcObject.field_146209_f = x;
-    };
-    this.setY = (y) => {
-      this.mcObject.field_146210_g = y;
-    };
-    this.setWidth = (width) => {
-      this.mcObject.field_146218_h = width;
-    };
-    this.setHeight = (height) => {
-      this.mcObject.field_146219_i = height;
-    };
+      return this.mcObject.field_146219_i
+    }
+    this.setX = x => {
+      this.mcObject.field_146209_f = x
+    }
+    this.setY = y => {
+      this.mcObject.field_146210_g = y
+    }
+    this.setWidth = width => {
+      this.mcObject.field_146218_h = width
+    }
+    this.setHeight = height => {
+      this.mcObject.field_146219_i = height
+    }
 
-    this.setEnabled = (enabled) => {
-      const isEnabledField =
-        this.mcObject.class.getDeclaredField("field_146226_p");
-      isEnabledField.setAccessible(true);
-      isEnabledField.set(this.mcObject, enabled);
-    };
+    this.setEnabled = enabled => {
+      const isEnabledField = this.mcObject.class.getDeclaredField('field_146226_p')
+      isEnabledField.setAccessible(true)
+      isEnabledField.set(this.mcObject, enabled)
+    }
 
-    this.setText = (text) => {
-      const textField = this.mcObject.class.getDeclaredField("field_146216_j");
-      textField.setAccessible(true);
-      textField.set(this.mcObject, text);
-    };
+    this.setText = text => {
+      const textField = this.mcObject.class.getDeclaredField('field_146216_j')
+      textField.setAccessible(true)
+      textField.set(this.mcObject, text)
+    }
 
     this.getText = () => {
-      const textField = this.mcObject.class.getDeclaredField("field_146216_j");
-      textField.setAccessible(true);
-      return textField.get(this.mcObject);
-    };
+      const textField = this.mcObject.class.getDeclaredField('field_146216_j')
+      textField.setAccessible(true)
+      return textField.get(this.mcObject)
+    }
 
-    this.setIsFocused = (isFocused) => {
-      const isFocusedField =
-        this.mcObject.class.getDeclaredField("field_146213_o");
-      isFocusedField.setAccessible(true);
-      isFocusedField.set(this.mcObject, isFocused);
-    };
+    this.setIsFocused = isFocused => {
+      const isFocusedField = this.mcObject.class.getDeclaredField('field_146213_o')
+      isFocusedField.setAccessible(true)
+      isFocusedField.set(this.mcObject, isFocused)
+    }
 
     this.isFocused = () => {
-      const isFocusedField =
-        this.mcObject.class.getDeclaredField("field_146213_o");
-      isFocusedField.setAccessible(true);
-      return isFocusedField.get(this.mcObject);
-    };
+      const isFocusedField = this.mcObject.class.getDeclaredField('field_146213_o')
+      isFocusedField.setAccessible(true)
+      return isFocusedField.get(this.mcObject)
+    }
 
     this.render = () => {
-      this.mcObject.func_146194_f();
-    };
+      this.mcObject.func_146194_f()
+    }
 
     this.mouseClicked = (mouseX, mouseY, button) => {
-      this.mcObject.func_146192_a(mouseX, mouseY, button);
-    };
+      this.mcObject.func_146192_a(mouseX, mouseY, button)
+    }
 
     this.keyTyped = (char, keyCode) => {
-      this.mcObject.func_146201_a(char, keyCode);
-    };
+      this.mcObject.func_146201_a(char, keyCode)
+    }
   }
 }
 
 class MenusVisualCache {
   constructor() {
-    this.cachedMenus = [];
-    this.filteredMenus = [];
-    this.isActive = false;
-    this.isScanning = false;
-    this.hoveredIndex = -1;
-    this.selectedIndex = -1;
-    this.scrollOffset = 0;
-    this.currentWorld = null;
-    this.filterText = this.persistFilterText;
-    this.showingFilter = false;
-    this.scannedPages = new Set();
-    this.totalPages = 0;
-    this.currentPage = 1;
-    this.scrollbarDragging = false;
-    this.scrollbarDragStartY = 0;
-    this.scrollbarDragStartOffset = 0;
+    this.cachedMenus = []
+    this.filteredMenus = []
+    this.isActive = false
+    this.isScanning = false
+    this.hoveredIndex = -1
+    this.selectedIndex = -1
+    this.scrollOffset = 0
+    this.currentWorld = null
+    this.filterText = this.persistFilterText
+    this.showingFilter = false
+    this.scannedPages = new Set()
+    this.totalPages = 0
+    this.currentPage = 1
+    this.scrollbarDragging = false
+    this.scrollbarDragStartY = 0
+    this.scrollbarDragStartOffset = 0
 
-    this.isAutoScanning = false;
-    this.autoScanTimeout = null;
+    this.isAutoScanning = false
+    this.autoScanTimeout = null
 
-    this.filterTextField = null;
-    this.initializeTextField = true;
-    this.persistentFilterText = "";
+    this.filterTextField = null
+    this.initializeTextField = true
+    this.persistentFilterText = ''
 
-    this.keybindBlocker = null;
+    this.keybindBlocker = null
 
-    this.lastMenuInventorySnapshot = null;
-    this.isInMenuEditGUI = false;
-    this.menuEditGUITimeout = null;
+    this.lastMenuInventorySnapshot = null
+    this.isInMenuEditGUI = false
+    this.menuEditGUITimeout = null
 
     this.dropdown = {
       isVisible: false,
@@ -139,11 +129,11 @@ class MenusVisualCache {
       hoveredOption: -1,
       deleteConfirmationActive: false,
       options: [
-        { text: "Edit", action: "edit", color: "§e" },
-        { text: "Display", action: "display", color: "§7" },
-        { text: "Delete", action: "delete", color: "§c" },
+        { text: 'Edit', action: 'edit', color: '§e' },
+        { text: 'Display', action: 'display', color: '§7' },
+        { text: 'Delete', action: 'delete', color: '§c' },
       ],
-    };
+    }
 
     this.colors = {
       panelBg: 0xe0000000,
@@ -170,327 +160,303 @@ class MenusVisualCache {
       createButton: 0xff4caf50,
       createButtonHover: 0xff45a049,
       createButtonDisabled: 0xff666666,
-    };
+    }
 
-    this.registerEvents();
+    this.registerEvents()
   }
 
   createTextField(x, y, width, height) {
     try {
-      const textField = new Input(x, y, width, height);
-      textField.setEnabled(true);
-      textField.setIsFocused(false);
-      textField.setText("");
+      const textField = new Input(x, y, width, height)
+      textField.setEnabled(true)
+      textField.setIsFocused(false)
+      textField.setText('')
 
-      return textField;
+      return textField
     } catch (error) {
-      ChatLib.chat(
-        PREFIX + `§c[ERROR] Failed to create text field: ${error.message}`
-      );
-      return null;
+      ChatLib.chat(PREFIX + `§c[ERROR] Failed to create text field: ${error.message}`)
+      return null
     }
   }
 
   disableAllKeybinds() {
-    if (this.keybindBlocker) return;
+    if (this.keybindBlocker) return
 
-    this.keybindBlocker = register("guiKey", (char, keyCode, gui, event) => {
+    this.keybindBlocker = register('guiKey', (char, keyCode, gui, event) => {
       if (keyCode !== 1) {
-        cancel(event);
+        cancel(event)
       }
-    });
+    })
   }
 
   showDropdown(menu, mouseX, mouseY) {
-    this.dropdown.isVisible = true;
-    this.dropdown.menu = menu;
-    this.dropdown.hoveredOption = -1;
-    this.dropdown.deleteConfirmationActive = false;
+    this.dropdown.isVisible = true
+    this.dropdown.menu = menu
+    this.dropdown.hoveredOption = -1
+    this.dropdown.deleteConfirmationActive = false
 
-    const itemHeight = 20;
-    this.dropdown.height = this.dropdown.options.length * itemHeight;
+    const itemHeight = 20
+    this.dropdown.height = this.dropdown.options.length * itemHeight
 
-    let maxWidth = 80;
-    this.dropdown.options.forEach((option) => {
-      const textWidth = Renderer.getStringWidth(option.text) + 16;
-      maxWidth = Math.max(maxWidth, textWidth);
-    });
+    let maxWidth = 80
+    this.dropdown.options.forEach(option => {
+      const textWidth = Renderer.getStringWidth(option.text) + 16
+      maxWidth = Math.max(maxWidth, textWidth)
+    })
 
-    const confirmTextWidth = Renderer.getStringWidth("CONFIRM") + 16;
-    maxWidth = Math.min(maxWidth, confirmTextWidth);
+    const confirmTextWidth = Renderer.getStringWidth('CONFIRM') + 16
+    maxWidth = Math.min(maxWidth, confirmTextWidth)
 
-    this.dropdown.width = maxWidth;
+    this.dropdown.width = maxWidth
 
-    const screenWidth = Renderer.screen.getWidth();
-    const screenHeight = Renderer.screen.getHeight();
+    const screenWidth = Renderer.screen.getWidth()
+    const screenHeight = Renderer.screen.getHeight()
 
-    this.dropdown.x = Math.min(mouseX, screenWidth - this.dropdown.width - 10);
-    this.dropdown.y = Math.min(
-      mouseY,
-      screenHeight - this.dropdown.height - 10
-    );
+    this.dropdown.x = Math.min(mouseX, screenWidth - this.dropdown.width - 10)
+    this.dropdown.y = Math.min(mouseY, screenHeight - this.dropdown.height - 10)
 
-    this.dropdown.x = Math.max(10, this.dropdown.x);
-    this.dropdown.y = Math.max(10, this.dropdown.y);
+    this.dropdown.x = Math.max(10, this.dropdown.x)
+    this.dropdown.y = Math.max(10, this.dropdown.y)
   }
 
   hideDropdown() {
-    this.dropdown.isVisible = false;
-    this.dropdown.menu = null;
-    this.dropdown.hoveredOption = -1;
-    this.dropdown.deleteConfirmationActive = false;
+    this.dropdown.isVisible = false
+    this.dropdown.menu = null
+    this.dropdown.hoveredOption = -1
+    this.dropdown.deleteConfirmationActive = false
   }
 
   renderDropdown() {
-    if (!this.dropdown.isVisible || !this.dropdown.menu) return;
+    if (!this.dropdown.isVisible || !this.dropdown.menu) return
 
-    const { x, y, width, height } = this.dropdown;
-    const itemHeight = 20;
+    const { x, y, width, height } = this.dropdown
+    const itemHeight = 20
 
-    let mouseX, mouseY;
+    let mouseX, mouseY
     try {
-      mouseX = Client.getMouseX();
-      mouseY = Client.getMouseY();
+      mouseX = Client.getMouseX()
+      mouseY = Client.getMouseY()
     } catch (e) {
-      mouseX = 0;
-      mouseY = 0;
+      mouseX = 0
+      mouseY = 0
     }
 
-    Renderer.drawRect(0xff000000, x - 1, y - 1, width + 2, height + 2);
-    Renderer.drawRect(this.colors.dropdownBg, x, y, width, height);
+    Renderer.drawRect(0xff000000, x - 1, y - 1, width + 2, height + 2)
+    Renderer.drawRect(this.colors.dropdownBg, x, y, width, height)
 
-    this.dropdown.hoveredOption = -1;
+    this.dropdown.hoveredOption = -1
 
     this.dropdown.options.forEach((option, index) => {
-      const itemY = y + index * itemHeight;
-      const isHovered =
-        mouseX >= x &&
-        mouseX <= x + width &&
-        mouseY >= itemY &&
-        mouseY <= itemY + itemHeight;
+      const itemY = y + index * itemHeight
+      const isHovered = mouseX >= x && mouseX <= x + width && mouseY >= itemY && mouseY <= itemY + itemHeight
 
-      if (isHovered) this.dropdown.hoveredOption = index;
+      if (isHovered) this.dropdown.hoveredOption = index
 
-      let backgroundColor = this.colors.dropdownHover;
-      let optionText = option.text;
-      let textColor = option.color;
+      let backgroundColor = this.colors.dropdownHover
+      let optionText = option.text
+      let textColor = option.color
 
-      if (option.action === "delete") {
+      if (option.action === 'delete') {
         if (this.dropdown.deleteConfirmationActive) {
-          optionText = "CONFIRM";
-          textColor = "§c§l";
-          backgroundColor = isHovered
-            ? this.colors.deleteConfirmationHover
-            : this.colors.deleteConfirmation;
+          optionText = 'CONFIRM'
+          textColor = '§c§l'
+          backgroundColor = isHovered ? this.colors.deleteConfirmationHover : this.colors.deleteConfirmation
         } else {
-          backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+          backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000
         }
       } else {
-        backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000;
+        backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000
       }
 
       if (backgroundColor !== 0x00000000) {
-        Renderer.drawRect(backgroundColor, x, itemY, width, itemHeight);
+        Renderer.drawRect(backgroundColor, x, itemY, width, itemHeight)
       }
 
-      Renderer.drawStringWithShadow(
-        textColor + optionText,
-        x + 8,
-        itemY + (itemHeight - 8) / 2
-      );
-    });
+      Renderer.drawStringWithShadow(textColor + optionText, x + 8, itemY + (itemHeight - 8) / 2)
+    })
 
-    const headerText = `§7${this.dropdown.menu.name}`;
-    const headerWidth = Renderer.getStringWidth(headerText);
+    const headerText = `§7${this.dropdown.menu.name}`
+    const headerWidth = Renderer.getStringWidth(headerText)
     if (headerWidth <= width - 16) {
-      Renderer.drawStringWithShadow(
-        headerText,
-        x + (width - headerWidth) / 2,
-        y - 12
-      );
+      Renderer.drawStringWithShadow(headerText, x + (width - headerWidth) / 2, y - 12)
     }
   }
 
   handleDropdownClick(mouseX, mouseY) {
-    if (!this.dropdown.isVisible) return false;
+    if (!this.dropdown.isVisible) return false
 
-    const { x, y, width, height } = this.dropdown;
+    const { x, y, width, height } = this.dropdown
 
-    if (
-      mouseX >= x &&
-      mouseX <= x + width &&
-      mouseY >= y &&
-      mouseY <= y + height
-    ) {
+    if (mouseX >= x && mouseX <= x + width && mouseY >= y && mouseY <= y + height) {
       if (this.dropdown.hoveredOption >= 0) {
-        const option = this.dropdown.options[this.dropdown.hoveredOption];
-        const menu = this.dropdown.menu;
+        const option = this.dropdown.options[this.dropdown.hoveredOption]
+        const menu = this.dropdown.menu
 
-        if (option.action === "delete") {
+        if (option.action === 'delete') {
           if (this.dropdown.deleteConfirmationActive) {
-            ChatLib.chat(PREFIX + `§cDeleting menu: ${menu.name}`);
-            ChatLib.command(`menu delete ${menu.name}`);
-            this.hideDropdown();
+            ChatLib.chat(PREFIX + `§cDeleting menu: ${menu.name}`)
+            ChatLib.command(`menu delete ${menu.name}`)
+            this.hideDropdown()
 
             setTimeout(() => {
-              ChatLib.command("menus");
-            }, 50);
+              ChatLib.command('menus')
+            }, 50)
 
-            return true;
+            return true
           } else {
-            this.dropdown.deleteConfirmationActive = true;
-            return true;
+            this.dropdown.deleteConfirmationActive = true
+            return true
           }
         } else {
-          this.executeDropdownAction(option.action, menu);
-          this.hideDropdown();
-          return true;
+          this.executeDropdownAction(option.action, menu)
+          this.hideDropdown()
+          return true
         }
       }
     }
-    this.hideDropdown();
-    return false;
+    this.hideDropdown()
+    return false
   }
 
   executeDropdownAction(action, menu) {
     switch (action) {
-      case "edit":
-        ChatLib.command(`menu edit ${menu.name}`);
-        break;
-      case "display":
-        ChatLib.command(`menu display ${menu.name}`);
-        break;
-      case "delete":
-        ChatLib.command(`menu delete ${menu.name}`);
-        break;
+      case 'edit':
+        ChatLib.command(`menu edit ${menu.name}`)
+        break
+      case 'display':
+        ChatLib.command(`menu display ${menu.name}`)
+        break
+      case 'delete':
+        ChatLib.command(`menu delete ${menu.name}`)
+        break
       default:
-        ChatLib.chat(PREFIX + `§cUnknown action: ${action}`);
+        ChatLib.chat(PREFIX + `§cUnknown action: ${action}`)
     }
   }
 
   restoreAllKeybinds() {
     if (this.keybindBlocker) {
-      this.keybindBlocker.unregister();
-      this.keybindBlocker = null;
+      this.keybindBlocker.unregister()
+      this.keybindBlocker = null
     }
   }
 
   registerEvents() {
-    register("worldLoad", () => {
-      const newWorld = World.getWorld();
+    register('worldLoad', () => {
+      const newWorld = World.getWorld()
       if (this.currentWorld && newWorld !== this.currentWorld) {
-        this.clearCache();
+        this.clearCache()
       }
-      this.currentWorld = newWorld;
-    });
+      this.currentWorld = newWorld
+    })
 
-    register("chat", (menuName, event) => {
+    register('chat', (menuName, event) => {
       if (this.cachedMenus.length > 0) {
-        this.handleMenuCreated(menuName);
+        this.handleMenuCreated(menuName)
       }
-    }).setChatCriteria("Created custom menu with the title ${menuName}!");
+    }).setChatCriteria('Created custom menu with the title ${menuName}!')
 
-    register("chat", (menuName, event) => {
+    register('chat', (menuName, event) => {
       if (this.cachedMenus.length > 0) {
-        this.handleMenuDeleted(menuName);
+        this.handleMenuDeleted(menuName)
       }
-    }).setChatCriteria("Deleted the menu ${menuName}");
+    }).setChatCriteria('Deleted the menu ${menuName}')
 
-    this.lastMenuInventorySnapshot = null;
-    this.isInMenuEditGUI = false;
-    this.menuEditGUITimeout = null;
+    this.lastMenuInventorySnapshot = null
+    this.isInMenuEditGUI = false
+    this.menuEditGUITimeout = null
 
-    register("guiOpened", (guiEvent) => {
-      const guiScreen = guiEvent.gui;
-      if (!guiScreen) return;
+    register('guiOpened', guiEvent => {
+      const guiScreen = guiEvent.gui
+      if (!guiScreen) return
 
-      const className = guiScreen.getClass().getSimpleName();
-      if (className !== "GuiChest") return;
+      const className = guiScreen.getClass().getSimpleName()
+      if (className !== 'GuiChest') return
 
       setTimeout(() => {
-        const inventory = Player.getOpenedInventory();
-        if (!inventory) return;
+        const inventory = Player.getOpenedInventory()
+        if (!inventory) return
 
-        const title = inventory.getName();
-        const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+        const title = inventory.getName()
+        const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, '') : ''
 
-        if (cleanTitle.startsWith("Edit: ") || cleanTitle === "Are you sure?") {
-          this.isInMenuEditGUI = true;
+        if (cleanTitle.startsWith('Edit: ') || cleanTitle === 'Are you sure?') {
+          this.isInMenuEditGUI = true
         } else {
           for (let i = 1; i <= 3; i++) {
             setTimeout(() => {
-              this.checkForMenusGUI(i);
-            }, 50 * i);
+              this.checkForMenusGUI(i)
+            }, 50 * i)
           }
         }
-      }, 50);
-    });
+      }, 50)
+    })
 
-    register("guiClosed", () => {
+    register('guiClosed', () => {
       if (this.isInMenuEditGUI) {
-        this.isInMenuEditGUI = false;
+        this.isInMenuEditGUI = false
       } else if (this.isActive) {
-        this.hideOverlay();
+        this.hideOverlay()
       }
-    });
+    })
 
-    register("guiRender", () => {
+    register('guiRender', () => {
       if (this.isActive && !this.isScanning && !this.isAutoScanning) {
-        this.performCacheValidation();
+        this.performCacheValidation()
       }
-    });
+    })
 
-    register("itemTooltip", () => {
+    register('itemTooltip', () => {
       if (this.isActive && !this.isScanning) {
-        this.detectPageChange();
+        this.detectPageChange()
       }
-    });
+    })
 
-    register("guiRender", (mouseX, mouseY) => {
+    register('guiRender', (mouseX, mouseY) => {
       if (this.isActive && this.cachedMenus.length > 0) {
-        this.renderOverlay();
-        this.renderDropdown();
+        this.renderOverlay()
+        this.renderDropdown()
       }
-    });
+    })
 
-    register("guiMouseClick", (mouseX, mouseY, button) => {
+    register('guiMouseClick', (mouseX, mouseY, button) => {
       if (this.isActive) {
-        return this.handleMouseClick(mouseX, mouseY, button);
+        return this.handleMouseClick(mouseX, mouseY, button)
       }
-    });
+    })
 
-    register("guiMouseRelease", (mouseX, mouseY, button) => {
+    register('guiMouseRelease', (mouseX, mouseY, button) => {
       if (this.isActive && this.scrollbarDragging && button === 0) {
-        this.scrollbarDragging = false;
-        return true;
+        this.scrollbarDragging = false
+        return true
       }
-    });
+    })
 
-    register("guiKey", (char, keyCode) => {
+    register('guiKey', (char, keyCode) => {
       if (this.isActive) {
-        return this.handleKeyPress(keyCode, char);
+        return this.handleKeyPress(keyCode, char)
       }
-    });
+    })
 
-    register("step", () => {
-      if (!this.isActive) return;
+    register('step', () => {
+      if (!this.isActive) return
 
-      let scroll = Mouse.getDWheel();
+      let scroll = Mouse.getDWheel()
       if (scroll !== 0) {
-        this.handleMouseScroll(scroll > 0 ? -1 : 1);
+        this.handleMouseScroll(scroll > 0 ? -1 : 1)
       }
-    }).setFps(60);
+    }).setFps(60)
   }
 
   handleMenuCreated(menuName) {
-    const existingMenu = this.cachedMenus.find((m) => m.name === menuName);
+    const existingMenu = this.cachedMenus.find(m => m.name === menuName)
 
     if (!existingMenu) {
       const newMenu = {
         name: menuName,
         displayName: `§f${menuName}`,
-        description: "Newly created menu - data not yet scanned",
-        descriptions: ["Newly created menu - data not yet scanned"],
+        description: 'Newly created menu - data not yet scanned',
+        descriptions: ['Newly created menu - data not yet scanned'],
         lore: [],
         slotIndex: -1,
         hasDescription: true,
@@ -500,334 +466,305 @@ class MenusVisualCache {
         page: this.currentPage || 1,
         isPlaceholder: true,
         createdAt: Date.now(),
-      };
+      }
 
-      this.cachedMenus.push(newMenu);
-      this.updateFilteredMenus();
+      this.cachedMenus.push(newMenu)
+      this.updateFilteredMenus()
 
-      ChatLib.chat(
-        PREFIX +
-          `§a+ Added menu "${menuName}" to cache (${this.cachedMenus.length} total)`
-      );
+      ChatLib.chat(PREFIX + `§a+ Added menu "${menuName}" to cache (${this.cachedMenus.length} total)`)
     } else {
-      ChatLib.chat(PREFIX + `§e Menu "${menuName}" already exists in cache`);
+      ChatLib.chat(PREFIX + `§e Menu "${menuName}" already exists in cache`)
     }
   }
 
   handleMenuDeleted(menuName) {
-    const initialCount = this.cachedMenus.length;
+    const initialCount = this.cachedMenus.length
 
-    this.cachedMenus = this.cachedMenus.filter((m) => m.name !== menuName);
+    this.cachedMenus = this.cachedMenus.filter(m => m.name !== menuName)
 
     if (this.cachedMenus.length < initialCount) {
-      this.updateFilteredMenus();
+      this.updateFilteredMenus()
 
       if (this.selectedIndex >= this.cachedMenus.length) {
-        this.selectedIndex = -1;
+        this.selectedIndex = -1
       }
 
-      ChatLib.chat(
-        PREFIX +
-          `§c- Removed menu "${menuName}" from cache (${this.cachedMenus.length} total)`
-      );
+      ChatLib.chat(PREFIX + `§c- Removed menu "${menuName}" from cache (${this.cachedMenus.length} total)`)
     } else {
-      ChatLib.chat(PREFIX + `§e Menu "${menuName}" was not found in cache`);
+      ChatLib.chat(PREFIX + `§e Menu "${menuName}" was not found in cache`)
     }
   }
 
   refreshPlaceholderMenus() {
-    const placeholders = this.cachedMenus.filter((m) => m.isPlaceholder);
+    const placeholders = this.cachedMenus.filter(m => m.isPlaceholder)
     if (placeholders.length > 0) {
-      ChatLib.chat(
-        PREFIX +
-          `§e${placeholders.length} placeholder menu(s) detected. Consider rescanning to get full data.`
-      );
+      ChatLib.chat(PREFIX + `§e${placeholders.length} placeholder menu(s) detected. Consider rescanning to get full data.`)
     }
   }
 
   validateCacheAgainstCurrentPage() {
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) return;
+    const inventory = Player.getOpenedInventory()
+    if (!inventory) return
 
-    const title = inventory.getName();
-    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
-    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/;
+    const title = inventory.getName()
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, '') : ''
+    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/
 
-    if (!menusRegex.test(cleanTitle)) return;
+    if (!menusRegex.test(cleanTitle)) return
 
-    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/);
-    const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1;
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/)
+    const currentPageNum = pageMatch ? parseInt(pageMatch[1]) : 1
 
-    if (
-      currentPageNum !== this.currentPage ||
-      !this.scannedPages.has(currentPageNum)
-    ) {
-      this.currentPage = currentPageNum;
-      this.scanCurrentPage();
+    if (currentPageNum !== this.currentPage || !this.scannedPages.has(currentPageNum)) {
+      this.currentPage = currentPageNum
+      this.scanCurrentPage()
     }
   }
 
   performCacheValidation() {
-    if (!this.isActive || this.isScanning) return;
+    if (!this.isActive || this.isScanning) return
 
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) return;
+    const inventory = Player.getOpenedInventory()
+    if (!inventory) return
 
-    const title = inventory.getName();
-    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
-    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/;
+    const title = inventory.getName()
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, '') : ''
+    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/
 
     if (menusRegex.test(cleanTitle)) {
-      this.validateCacheAgainstCurrentPage();
+      this.validateCacheAgainstCurrentPage()
     }
   }
 
   cleanStaleMenus() {
-    const beforeCount = this.cachedMenus.length;
+    const beforeCount = this.cachedMenus.length
 
-    this.cachedMenus = this.cachedMenus.filter((menu) => {
-      if (menu.deleted) return false;
+    this.cachedMenus = this.cachedMenus.filter(menu => {
+      if (menu.deleted) return false
 
-      if (
-        menu.isPlaceholder &&
-        menu.createdAt &&
-        Date.now() - menu.createdAt > 300000
-      ) {
-        return false;
+      if (menu.isPlaceholder && menu.createdAt && Date.now() - menu.createdAt > 300000) {
+        return false
       }
 
-      return true;
-    });
+      return true
+    })
 
-    const removedCount = beforeCount - this.cachedMenus.length;
+    const removedCount = beforeCount - this.cachedMenus.length
     if (removedCount > 0) {
-      this.updateFilteredMenus();
+      this.updateFilteredMenus()
     }
   }
 
   handleMouseScroll(direction) {
     if (this.dropdown.isVisible) {
-      this.hideDropdown();
+      this.hideDropdown()
     }
 
-    const availableHeight = this.getListAvailableHeight();
-    const itemHeight = 23;
-    const maxVisibleItems = Math.floor(availableHeight / itemHeight);
-    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems);
+    const availableHeight = this.getListAvailableHeight()
+    const itemHeight = 23
+    const maxVisibleItems = Math.floor(availableHeight / itemHeight)
+    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems)
 
-    this.scrollOffset += direction * 1;
-    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
+    this.scrollOffset += direction * 1
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll))
   }
 
   getListAvailableHeight() {
-    const screenHeight = Renderer.screen.getHeight();
-    const panelHeight = this.calculatePanelDimensions().height;
-    return panelHeight - 130;
+    const screenHeight = Renderer.screen.getHeight()
+    const panelHeight = this.calculatePanelDimensions().height
+    return panelHeight - 130
   }
 
   calculatePanelDimensions() {
-    const screenWidth = Renderer.screen.getWidth();
-    const screenHeight = Renderer.screen.getHeight();
+    const screenWidth = Renderer.screen.getWidth()
+    const screenHeight = Renderer.screen.getHeight()
 
-    const chestGuiWidth = 176;
-    const chestGuiHeight = 166;
-    const chestGuiX = (screenWidth - chestGuiWidth) / 2;
-    const chestGuiY = (screenHeight - chestGuiHeight) / 2;
+    const chestGuiWidth = 176
+    const chestGuiHeight = 166
+    const chestGuiX = (screenWidth - chestGuiWidth) / 2
+    const chestGuiY = (screenHeight - chestGuiHeight) / 2
 
-    const rightEdgeOfChest = chestGuiX + chestGuiWidth;
-    const availableWidthOnRight = screenWidth - rightEdgeOfChest - 20;
+    const rightEdgeOfChest = chestGuiX + chestGuiWidth
+    const availableWidthOnRight = screenWidth - rightEdgeOfChest - 20
 
-    const maxPanelWidth = 400;
-    const minPanelWidth = 300;
-    let panelWidth = Math.min(
-      maxPanelWidth,
-      Math.max(minPanelWidth, availableWidthOnRight)
-    );
+    const maxPanelWidth = 400
+    const minPanelWidth = 300
+    let panelWidth = Math.min(maxPanelWidth, Math.max(minPanelWidth, availableWidthOnRight))
 
-    let panelX;
+    let panelX
     if (availableWidthOnRight < minPanelWidth) {
-      panelWidth = Math.min(maxPanelWidth, chestGuiX - 20);
-      panelX = 10;
+      panelWidth = Math.min(maxPanelWidth, chestGuiX - 20)
+      panelX = 10
     } else {
-      panelX = rightEdgeOfChest + 10;
+      panelX = rightEdgeOfChest + 10
     }
 
-    const maxPanelHeight = Math.min(screenHeight - 40, 600);
-    const panelHeight = maxPanelHeight;
-    const panelY = Math.max(10, (screenHeight - panelHeight) / 2);
+    const maxPanelHeight = Math.min(screenHeight - 40, 600)
+    const panelHeight = maxPanelHeight
+    const panelY = Math.max(10, (screenHeight - panelHeight) / 2)
 
     return {
       width: panelWidth,
       height: panelHeight,
       x: panelX,
       y: panelY,
-    };
+    }
   }
 
   clearCache() {
-    this.cachedMenus = [];
-    this.filteredMenus = [];
-    this.isActive = false;
-    this.hoveredIndex = -1;
-    this.selectedIndex = -1;
-    this.scrollOffset = 0;
-    this.isScanning = false;
-    this.filterText = "";
-    this.showingFilter = false;
-    this.scannedPages.clear();
-    this.totalPages = 0;
-    this.currentPage = 1;
-    this.scrollbarDragging = false;
-    this.filterTextField = null;
-    this.initializeTextField = true;
+    this.cachedMenus = []
+    this.filteredMenus = []
+    this.isActive = false
+    this.hoveredIndex = -1
+    this.selectedIndex = -1
+    this.scrollOffset = 0
+    this.isScanning = false
+    this.filterText = ''
+    this.showingFilter = false
+    this.scannedPages.clear()
+    this.totalPages = 0
+    this.currentPage = 1
+    this.scrollbarDragging = false
+    this.filterTextField = null
+    this.initializeTextField = true
 
-    this.isAutoScanning = false;
+    this.isAutoScanning = false
     if (this.autoScanTimeout) {
-      clearTimeout(this.autoScanTimeout);
-      this.autoScanTimeout = null;
+      clearTimeout(this.autoScanTimeout)
+      this.autoScanTimeout = null
     }
 
-    this.lastMenuInventorySnapshot = null;
-    this.isInMenuEditGUI = false;
+    this.lastMenuInventorySnapshot = null
+    this.isInMenuEditGUI = false
     if (this.menuEditGUITimeout) {
-      clearTimeout(this.menuEditGUITimeout);
-      this.menuEditGUITimeout = null;
+      clearTimeout(this.menuEditGUITimeout)
+      this.menuEditGUITimeout = null
     }
 
-    this.restoreAllKeybinds();
+    this.restoreAllKeybinds()
   }
 
   checkForMenusGUI(attempt) {
-    if (this.isActive || this.isScanning) return;
+    if (this.isActive || this.isScanning) return
 
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) return;
+    const inventory = Player.getOpenedInventory()
+    if (!inventory) return
 
-    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/;
-    const title = inventory.getName();
-    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
+    const menusRegex = /^\(\d+\/\d+\) Custom Menus$|^Custom Menus$/
+    const title = inventory.getName()
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, '') : ''
 
     if (menusRegex.test(cleanTitle)) {
-      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/);
+      const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/)
       if (pageMatch) {
-        this.currentPage = parseInt(pageMatch[1]);
-        this.totalPages = parseInt(pageMatch[2]);
-      } else if (cleanTitle === "Custom Menus") {
-        this.currentPage = 1;
-        this.totalPages = this.detectTotalPages(inventory);
+        this.currentPage = parseInt(pageMatch[1])
+        this.totalPages = parseInt(pageMatch[2])
+      } else if (cleanTitle === 'Custom Menus') {
+        this.currentPage = 1
+        this.totalPages = this.detectTotalPages(inventory)
       }
 
-      this.isScanning = true;
-      this.scanCurrentPage();
+      this.isScanning = true
+      this.scanCurrentPage()
     }
   }
 
   detectTotalPages(inventory) {
-    const nextPageItem = inventory.getStackInSlot(53);
-    const previousPageItem = inventory.getStackInSlot(45);
+    const nextPageItem = inventory.getStackInSlot(53)
+    const previousPageItem = inventory.getStackInSlot(45)
 
-    if (nextPageItem && nextPageItem.getName() !== "Air") {
-      const lore = nextPageItem.getLore() || [];
-      const itemName = nextPageItem.getName() || "";
+    if (nextPageItem && nextPageItem.getName() !== 'Air') {
+      const lore = nextPageItem.getLore() || []
+      const itemName = nextPageItem.getName() || ''
 
-      const linesToCheck = [...lore, itemName].filter(
-        (line) => line != null && line !== ""
-      );
+      const linesToCheck = [...lore, itemName].filter(line => line != null && line !== '')
 
       for (const line of linesToCheck) {
         try {
-          const cleanLine = line.replace(/§[0-9a-fk-or]/g, "");
-          const pagePattern = cleanLine.match(/(\d+)\/(\d+)/);
+          const cleanLine = line.replace(/§[0-9a-fk-or]/g, '')
+          const pagePattern = cleanLine.match(/(\d+)\/(\d+)/)
           if (pagePattern) {
-            return parseInt(pagePattern[2]);
+            return parseInt(pagePattern[2])
           }
         } catch (error) {
-          continue;
+          continue
         }
       }
 
-      return 999;
+      return 999
     } else {
-      return 1;
+      return 1
     }
   }
 
   detectPageChange() {
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) return;
+    const inventory = Player.getOpenedInventory()
+    if (!inventory) return
 
-    const title = inventory.getName();
-    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
-    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/);
+    const title = inventory.getName()
+    const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, '') : ''
+    const pageMatch = cleanTitle.match(/^\((\d+)\/(\d+)\) Custom Menus$/)
 
     if (pageMatch) {
-      const newPage = parseInt(pageMatch[1]);
-      const newTotalPages = parseInt(pageMatch[2]);
+      const newPage = parseInt(pageMatch[1])
+      const newTotalPages = parseInt(pageMatch[2])
 
       if (newPage !== this.currentPage || newTotalPages !== this.totalPages) {
-        this.currentPage = newPage;
+        this.currentPage = newPage
 
         if (this.totalPages === 999 || newTotalPages !== this.totalPages) {
-          this.totalPages = newTotalPages;
+          this.totalPages = newTotalPages
         }
 
         if (!this.scannedPages.has(newPage)) {
           if (this.isAutoScanning) {
-            ChatLib.chat(
-              PREFIX + `§bAuto-scanning page ${newPage}/${this.totalPages}...`
-            );
+            ChatLib.chat(PREFIX + `§bAuto-scanning page ${newPage}/${this.totalPages}...`)
           } else {
-            ChatLib.chat(
-              PREFIX +
-                `§eNew page detected: ${newPage}/${this.totalPages}, scanning...`
-            );
+            ChatLib.chat(PREFIX + `§eNew page detected: ${newPage}/${this.totalPages}, scanning...`)
           }
-          this.scanCurrentPage();
+          this.scanCurrentPage()
         } else if (this.isAutoScanning) {
           setTimeout(() => {
-            this.continueAutoScan();
-          }, this.autoScanDelay / 2);
+            this.continueAutoScan()
+          }, this.autoScanDelay / 2)
         }
       }
-    } else if (cleanTitle === "Custom Menus") {
+    } else if (cleanTitle === 'Custom Menus') {
       if (this.currentPage !== 1) {
-        this.currentPage = 1;
+        this.currentPage = 1
 
         if (!this.scannedPages.has(1)) {
-          ChatLib.chat(PREFIX + `§eBack to page 1, scanning...`);
-          this.scanCurrentPage();
+          ChatLib.chat(PREFIX + `§eBack to page 1, scanning...`)
+          this.scanCurrentPage()
         } else if (this.isAutoScanning) {
           setTimeout(() => {
-            this.continueAutoScan();
-          }, this.autoScanDelay / 2);
+            this.continueAutoScan()
+          }, this.autoScanDelay / 2)
         }
       }
     }
   }
 
   stopAutoScan() {
-    if (!this.isAutoScanning) return;
+    if (!this.isAutoScanning) return
 
-    this.isAutoScanning = false;
+    this.isAutoScanning = false
     if (this.autoScanTimeout) {
-      clearTimeout(this.autoScanTimeout);
-      this.autoScanTimeout = null;
+      clearTimeout(this.autoScanTimeout)
+      this.autoScanTimeout = null
     }
 
-    ChatLib.chat(
-      PREFIX +
-        `§eAuto-scan stopped. Scanned ${this.scannedPages.size}/${this.totalPages} pages.`
-    );
+    ChatLib.chat(PREFIX + `§eAuto-scan stopped. Scanned ${this.scannedPages.size}/${this.totalPages} pages.`)
   }
 
   scanCurrentPage() {
-    const inventory = Player.getOpenedInventory();
+    const inventory = Player.getOpenedInventory()
     if (!inventory) {
-      this.isScanning = false;
-      return;
+      this.isScanning = false
+      return
     }
 
-    this.scannedPages.add(this.currentPage);
+    this.scannedPages.add(this.currentPage)
 
     // prettier-ignore
     const menuSlots = [
@@ -836,87 +773,71 @@ class MenusVisualCache {
       28, 29, 30, 31, 32, 33, 34, // Row 3
     ];
 
-    const currentPageMenus = new Set();
-    let newMenusFound = 0;
-    let updatedPlaceholders = 0;
-    let renamedMenus = 0;
+    const currentPageMenus = new Set()
+    let newMenusFound = 0
+    let updatedPlaceholders = 0
+    let renamedMenus = 0
 
-    menuSlots.forEach((slotIndex) => {
-      const item = inventory.getStackInSlot(slotIndex);
-      if (item && item.getName() !== "Air") {
-        const menuData = this.parseMenuItem(item, slotIndex);
+    menuSlots.forEach(slotIndex => {
+      const item = inventory.getStackInSlot(slotIndex)
+      if (item && item.getName() !== 'Air') {
+        const menuData = this.parseMenuItem(item, slotIndex)
         if (menuData) {
-          currentPageMenus.add(menuData.name);
+          currentPageMenus.add(menuData.name)
 
-          const existingMenu = this.cachedMenus.find(
-            (m) => m.name === menuData.name
-          );
+          const existingMenu = this.cachedMenus.find(m => m.name === menuData.name)
 
           if (!existingMenu) {
             const possibleRename = this.cachedMenus.find(
-              (m) =>
-                m.page === this.currentPage &&
-                m.slotIndex === slotIndex &&
-                m.name !== menuData.name
-            );
+              m => m.page === this.currentPage && m.slotIndex === slotIndex && m.name !== menuData.name
+            )
 
             if (possibleRename) {
               if (renamedMenus < 2) {
-                ChatLib.chat(
-                  PREFIX +
-                    `§6Detected rename: "${possibleRename.name}" → "${menuData.name}"`
-                );
+                ChatLib.chat(PREFIX + `§6Detected rename: "${possibleRename.name}" → "${menuData.name}"`)
               }
 
-              Object.assign(possibleRename, menuData);
-              renamedMenus++;
+              Object.assign(possibleRename, menuData)
+              renamedMenus++
             } else {
-              this.cachedMenus.push(menuData);
-              newMenusFound++;
+              this.cachedMenus.push(menuData)
+              newMenusFound++
             }
           } else if (existingMenu.isPlaceholder) {
-            Object.assign(existingMenu, menuData);
-            existingMenu.isPlaceholder = false;
-            updatedPlaceholders++;
+            Object.assign(existingMenu, menuData)
+            existingMenu.isPlaceholder = false
+            updatedPlaceholders++
           } else {
-            Object.assign(existingMenu, menuData);
+            Object.assign(existingMenu, menuData)
           }
         }
       }
-    });
+    })
 
-    const deletedMenus = this.cachedMenus.filter(
-      (m) =>
-        m.page === this.currentPage &&
-        !m.isPlaceholder &&
-        !currentPageMenus.has(m.name)
-    );
+    const deletedMenus = this.cachedMenus.filter(m => m.page === this.currentPage && !m.isPlaceholder && !currentPageMenus.has(m.name))
 
     if (deletedMenus.length > 0) {
-      deletedMenus.forEach((menu) => {
+      deletedMenus.forEach(menu => {
         if (deletedMenus.length <= 2) {
-          ChatLib.chat(PREFIX + `§cDeleted menu detected: "${menu.name}"`);
+          ChatLib.chat(PREFIX + `§cDeleted menu detected: "${menu.name}"`)
         }
-        const index = this.cachedMenus.indexOf(menu);
+        const index = this.cachedMenus.indexOf(menu)
         if (index > -1) {
-          this.cachedMenus.splice(index, 1);
+          this.cachedMenus.splice(index, 1)
         }
-      });
+      })
     }
 
     if (this.isAutoScanning) {
-      let message = `§bPage ${this.currentPage}:`;
-      if (newMenusFound > 0) message += ` +${newMenusFound} new`;
-      if (updatedPlaceholders > 0)
-        message += ` ~${updatedPlaceholders} updated`;
+      let message = `§bPage ${this.currentPage}:`
+      if (newMenusFound > 0) message += ` +${newMenusFound} new`
+      if (updatedPlaceholders > 0) message += ` ~${updatedPlaceholders} updated`
 
-      if (renamedMenus > 0 && renamedMenus <= 2)
-        message += ` ↻${renamedMenus} renamed`;
+      if (renamedMenus > 0 && renamedMenus <= 2) message += ` ↻${renamedMenus} renamed`
 
-      if (deletedMenus.length > 0 && deletedMenus.length <= 2)
-        message += ` -${deletedMenus.length} deleted`;
+      if (deletedMenus.length > 0 && deletedMenus.length <= 2) message += ` -${deletedMenus.length} deleted`
 
-      message += ` (Total: ${this.cachedMenus.length})`;
+      message += ` (Total: ${this.cachedMenus.length})`
 
       if (
         newMenusFound > 0 ||
@@ -924,22 +845,19 @@ class MenusVisualCache {
         (renamedMenus > 0 && renamedMenus <= 2) ||
         (deletedMenus.length > 0 && deletedMenus.length <= 2)
       ) {
-        ChatLib.chat(PREFIX + message);
-        World.playSound("random.orb", 1, 2);
+        ChatLib.chat(PREFIX + message)
+        World.playSound('random.orb', 1, 2)
       }
     } else {
-      let message = `§aPage ${this.currentPage} scan complete.`;
-      if (newMenusFound > 0) message += ` Found ${newMenusFound} new menus.`;
-      if (updatedPlaceholders > 0)
-        message += ` Updated ${updatedPlaceholders} placeholders.`;
+      let message = `§aPage ${this.currentPage} scan complete.`
+      if (newMenusFound > 0) message += ` Found ${newMenusFound} new menus.`
+      if (updatedPlaceholders > 0) message += ` Updated ${updatedPlaceholders} placeholders.`
 
-      if (renamedMenus > 0 && renamedMenus <= 2)
-        message += ` Detected ${renamedMenus} renames.`;
+      if (renamedMenus > 0 && renamedMenus <= 2) message += ` Detected ${renamedMenus} renames.`
 
-      if (deletedMenus.length > 0 && deletedMenus.length <= 2)
-        message += ` Removed ${deletedMenus.length} deleted menus.`;
+      if (deletedMenus.length > 0 && deletedMenus.length <= 2) message += ` Removed ${deletedMenus.length} deleted menus.`
 
-      message += ` Total: ${this.cachedMenus.length}`;
+      message += ` Total: ${this.cachedMenus.length}`
 
       if (
         newMenusFound > 0 ||
@@ -947,147 +865,144 @@ class MenusVisualCache {
         (renamedMenus > 0 && renamedMenus <= 2) ||
         (deletedMenus.length > 0 && deletedMenus.length <= 2)
       ) {
-        ChatLib.chat(PREFIX + message);
+        ChatLib.chat(PREFIX + message)
       }
     }
 
-    this.updateFilteredMenus();
+    this.updateFilteredMenus()
 
     if (!this.isActive) {
-      this.isActive = true;
-      this.initializeTextField = true;
-      this.disableAllKeybinds();
+      this.isActive = true
+      this.initializeTextField = true
+      this.disableAllKeybinds()
     }
 
-    this.isScanning = false;
+    this.isScanning = false
 
     if (this.scannedPages.size < this.totalPages && !this.isAutoScanning) {
-      const unscannedPages = [];
+      const unscannedPages = []
       for (let i = 1; i <= this.totalPages; i++) {
         if (!this.scannedPages.has(i)) {
-          unscannedPages.push(i);
+          unscannedPages.push(i)
         }
       }
     }
   }
 
   startAutoScan() {
-    if (this.isAutoScanning || !this.isActive) return;
+    if (this.isAutoScanning || !this.isActive) return
 
-    this.isAutoScanning = true;
+    this.isAutoScanning = true
 
-    const inventory = Player.getOpenedInventory();
-    const previousPageItem = inventory.getStackInSlot(45);
+    const inventory = Player.getOpenedInventory()
+    const previousPageItem = inventory.getStackInSlot(45)
 
-    if (previousPageItem && previousPageItem.getName() !== "Air") {
-      inventory.click(45, false, "RIGHT");
+    if (previousPageItem && previousPageItem.getName() !== 'Air') {
+      inventory.click(45, false, 'RIGHT')
     }
 
-    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
-    setTimeout(() => this.continueAutoScan(), 100);
+    ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`)
+    setTimeout(() => this.continueAutoScan(), 100)
   }
 
   scanLastPageOnly() {
     if (this.totalPages <= 1) {
-      this.scanCurrentPage();
-      return;
+      this.scanCurrentPage()
+      return
     }
 
-    const inventory = Player.getOpenedInventory();
-    if (!inventory) return;
+    const inventory = Player.getOpenedInventory()
+    if (!inventory) return
 
-    const nextPageItem = inventory.getStackInSlot(53);
-    if (nextPageItem && nextPageItem.getName() !== "Air") {
-      ChatLib.chat(PREFIX + `§bGoing to last page (${this.totalPages})...`);
-      inventory.click(53, false, "RIGHT");
+    const nextPageItem = inventory.getStackInSlot(53)
+    if (nextPageItem && nextPageItem.getName() !== 'Air') {
+      ChatLib.chat(PREFIX + `§bGoing to last page (${this.totalPages})...`)
+      inventory.click(53, false, 'RIGHT')
 
       setTimeout(() => {
-        this.scanCurrentPage();
-      }, 500);
+        this.scanCurrentPage()
+      }, 500)
     } else {
-      this.scanCurrentPage();
+      this.scanCurrentPage()
     }
   }
 
   continueAutoScan() {
-    if (!this.isAutoScanning) return;
+    if (!this.isAutoScanning) return
 
-    const inventory = Player.getOpenedInventory();
+    const inventory = Player.getOpenedInventory()
     if (!inventory) {
-      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 200);
-      return;
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 200)
+      return
     }
 
     if (!this.scannedPages.has(this.currentPage)) {
-      this.scanCurrentPage();
+      this.scanCurrentPage()
     }
 
-    const nextPageItem = inventory.getStackInSlot(53);
+    const nextPageItem = inventory.getStackInSlot(53)
 
-    if (nextPageItem && nextPageItem.getName() !== "Air") {
-      inventory.click(53, false, "LEFT");
-      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500);
-      return;
+    if (nextPageItem && nextPageItem.getName() !== 'Air') {
+      inventory.click(53, false, 'LEFT')
+      this.autoScanTimeout = setTimeout(() => this.continueAutoScan(), 500)
+      return
     }
 
-    ChatLib.chat(
-      PREFIX +
-        `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedMenus.length} total menus.`
-    );
-    this.isAutoScanning = false;
-    this.refreshPlaceholderMenus();
+    ChatLib.chat(PREFIX + `§aAuto-scan complete! Scanned all ${this.totalPages} pages with ${this.cachedMenus.length} total menus.`)
+    this.isAutoScanning = false
+    this.refreshPlaceholderMenus()
   }
 
   parseMenuItem(item, slotIndex) {
-    const itemName = item.getName();
-    const cleanName = itemName.replace(/§[0-9a-fk-or]/g, "");
-    const lore = item.getLore();
+    const itemName = item.getName()
+    const cleanName = itemName.replace(/§[0-9a-fk-or]/g, '')
+    const lore = item.getLore()
 
-    let descriptions = [];
-    let hasMenuData = false;
+    let descriptions = []
+    let hasMenuData = false
 
-    lore.forEach((line) => {
-      const cleanLine = line.replace(/§[0-9a-fk-or]/g, "");
+    lore.forEach(line => {
+      const cleanLine = line.replace(/§[0-9a-fk-or]/g, '')
 
       if (
-        cleanLine.trim() === "" ||
-        cleanLine.includes("Left Click") ||
-        cleanLine.includes("Right Click") ||
-        cleanLine.includes("SHIFT") ||
-        cleanLine.includes("more options")
+        cleanLine.trim() === '' ||
+        cleanLine.includes('Left Click') ||
+        cleanLine.includes('Right Click') ||
+        cleanLine.includes('SHIFT') ||
+        cleanLine.includes('more options')
       ) {
-        return;
+        return
       }
 
-      if (line.includes("§7")) {
-        descriptions.push(cleanLine.trim());
-        hasMenuData = true;
+      if (line.includes('§7')) {
+        descriptions.push(cleanLine.trim())
+        hasMenuData = true
       }
-    });
+    })
 
-    let ctItem = null;
-    let itemId = 0;
-    let itemDamage = 0;
+    let ctItem = null
+    let itemId = 0
+    let itemDamage = 0
 
     try {
-      itemId = item.getID();
-      itemDamage = item.getMetadata ? item.getMetadata() : 0;
+      itemId = item.getID()
+      itemDamage = item.getMetadata ? item.getMetadata() : 0
 
       if (itemId && itemId !== 0) {
         if (itemDamage > 0) {
-          ctItem = new Item(itemId, itemDamage);
+          ctItem = new Item(itemId, itemDamage)
         } else {
-          ctItem = new Item(itemId);
+          ctItem = new Item(itemId)
         }
       }
     } catch (error) {
-      ctItem = null;
+      ctItem = null
     }
 
     return {
       name: cleanName,
       displayName: itemName,
-      description: descriptions.length > 0 ? descriptions.join(" ") : null,
+      description: descriptions.length > 0 ? descriptions.join(' ') : null,
       descriptions: descriptions,
       lore: lore,
       slotIndex: slotIndex,
@@ -1097,301 +1012,218 @@ class MenusVisualCache {
       itemDamage: itemDamage,
       page: this.currentPage,
       isPlaceholder: false,
-    };
+    }
   }
 
   updateFilteredMenus() {
-    const filterText = this.filterTextField
-      ? this.filterTextField.getText()
-      : "";
+    const filterText = this.filterTextField ? this.filterTextField.getText() : ''
 
     if (!filterText) {
-      this.filteredMenus = [...this.cachedMenus];
+      this.filteredMenus = [...this.cachedMenus]
     } else {
-      const filter = filterText.toLowerCase();
+      const filter = filterText.toLowerCase()
       this.filteredMenus = this.cachedMenus.filter(
-        (menu) =>
+        menu =>
           menu.name.toLowerCase().includes(filter) ||
-          (menu.description &&
-            menu.description.toLowerCase().includes(filter)) ||
-          (menu.descriptions &&
-            menu.descriptions.some((desc) =>
-              desc.toLowerCase().includes(filter)
-            ))
-      );
+          (menu.description && menu.description.toLowerCase().includes(filter)) ||
+          (menu.descriptions && menu.descriptions.some(desc => desc.toLowerCase().includes(filter)))
+      )
     }
 
     if (this.selectedIndex >= this.filteredMenus.length) {
-      this.selectedIndex = -1;
+      this.selectedIndex = -1
     }
 
-    const availableHeight = this.getListAvailableHeight();
-    const itemHeight = 23;
-    const maxVisibleItems = Math.floor(availableHeight / itemHeight);
-    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems);
-    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
+    const availableHeight = this.getListAvailableHeight()
+    const itemHeight = 23
+    const maxVisibleItems = Math.floor(availableHeight / itemHeight)
+    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems)
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll))
   }
 
   saveFilterText() {
     if (this.filterTextField) {
-      this.persistentFilterText = this.filterTextField.getText();
+      this.persistentFilterText = this.filterTextField.getText()
     }
   }
 
   loadFilterText() {
-    return this.persistentFilterText;
+    return this.persistentFilterText
   }
 
   getScannedPagesDisplay() {
     if (this.totalPages === 999) {
-      return `(${this.scannedPages.size}/?)`;
+      return `(${this.scannedPages.size}/?)`
     } else if (this.totalPages === 0) {
-      return `(${this.scannedPages.size}/?)`;
+      return `(${this.scannedPages.size}/?)`
     } else {
-      return `(${this.scannedPages.size}/${this.totalPages})`;
+      return `(${this.scannedPages.size}/${this.totalPages})`
     }
   }
 
   areAllPagesScanned() {
-    if (this.scannedPages.size === 0) return false;
+    if (this.scannedPages.size === 0) return false
     if (this.totalPages === 0 || this.totalPages === 999) {
-      return false;
+      return false
     }
-    return this.scannedPages.size >= this.totalPages;
+    return this.scannedPages.size >= this.totalPages
   }
 
   renderOverlay() {
     try {
-      const panelDims = this.calculatePanelDimensions();
-      const {
-        width: panelWidth,
-        height: panelHeight,
-        x: panelX,
-        y: panelY,
-      } = panelDims;
+      const panelDims = this.calculatePanelDimensions()
+      const { width: panelWidth, height: panelHeight, x: panelX, y: panelY } = panelDims
 
       if (this.initializeTextField || !this.filterTextField) {
-        const filterY = panelY + 30;
-        const filterHeight = 20;
-        this.filterTextField = this.createTextField(
-          panelX + 10,
-          filterY,
-          panelWidth - 20,
-          filterHeight
-        );
-        this.initializeTextField = false;
+        const filterY = panelY + 30
+        const filterHeight = 20
+        this.filterTextField = this.createTextField(panelX + 10, filterY, panelWidth - 20, filterHeight)
+        this.initializeTextField = false
 
         if (this.filterTextField) {
-          const savedFilterText = this.loadFilterText();
-          this.filterTextField.setText(savedFilterText);
-          this.filterText = savedFilterText;
-          this.updateFilteredMenus();
+          const savedFilterText = this.loadFilterText()
+          this.filterTextField.setText(savedFilterText)
+          this.filterText = savedFilterText
+          this.updateFilteredMenus()
         }
       }
 
       // Draw panel with border
-      Renderer.drawRect(
-        0xdd000000,
-        panelX - 1,
-        panelY - 1,
-        panelWidth + 4,
-        panelHeight + 4
-      );
-      Renderer.drawRect(
-        0xff444444,
-        panelX - 1,
-        panelY - 1,
-        panelWidth + 2,
-        panelHeight + 2
-      );
-      Renderer.drawRect(0xcc222222, panelX, panelY, panelWidth, panelHeight);
+      Renderer.drawRect(0xdd000000, panelX - 1, panelY - 1, panelWidth + 4, panelHeight + 4)
+      Renderer.drawRect(0xff444444, panelX - 1, panelY - 1, panelWidth + 2, panelHeight + 2)
+      Renderer.drawRect(0xcc222222, panelX, panelY, panelWidth, panelHeight)
 
-      let currentY = panelY + 10;
+      let currentY = panelY + 10
 
       // Draw title
-      const placeholderCount = this.cachedMenus.filter(
-        (m) => m.isPlaceholder
-      ).length;
-      const scannedInfo = this.getScannedPagesDisplay();
-      let title = `${PREFIX}Custom Menus (${this.cachedMenus.length}) ${scannedInfo}`;
-      if (placeholderCount > 0) title += ` §e[${placeholderCount} new]`;
-      const titleWidth = Renderer.getStringWidth(title);
-      Renderer.drawStringWithShadow(
-        title,
-        panelX + (panelWidth - titleWidth) / 2,
-        currentY
-      );
-      currentY += 20;
+      const placeholderCount = this.cachedMenus.filter(m => m.isPlaceholder).length
+      const scannedInfo = this.getScannedPagesDisplay()
+      let title = `${PREFIX}Custom Menus (${this.cachedMenus.length}) ${scannedInfo}`
+      if (placeholderCount > 0) title += ` §e[${placeholderCount} new]`
+      const titleWidth = Renderer.getStringWidth(title)
+      Renderer.drawStringWithShadow(title, panelX + (panelWidth - titleWidth) / 2, currentY)
+      currentY += 20
 
       if (this.filterTextField) {
-        const filterText = this.filterTextField.getText();
-        const hasText = filterText && filterText.length > 0;
-        const filterFieldWidth = hasText ? panelWidth - 40 : panelWidth - 20;
-        this.filterTextField.setWidth(filterFieldWidth);
-        this.filterTextField.render();
+        const filterText = this.filterTextField.getText()
+        const hasText = filterText && filterText.length > 0
+        const filterFieldWidth = hasText ? panelWidth - 40 : panelWidth - 20
+        this.filterTextField.setWidth(filterFieldWidth)
+        this.filterTextField.render()
 
         if (hasText) {
-          const buttonSize = 20;
-          const buttonX = panelX + 10 + filterFieldWidth + 4;
-          const buttonY = currentY;
+          const buttonSize = 20
+          const buttonX = panelX + 10 + filterFieldWidth + 4
+          const buttonY = currentY
           let mouseX = 0,
-            mouseY = 0;
+            mouseY = 0
           try {
-            mouseX = Client.getMouseX();
-            mouseY = Client.getMouseY();
+            mouseX = Client.getMouseX()
+            mouseY = Client.getMouseY()
           } catch (e) {}
-          const isHovered =
-            mouseX >= buttonX &&
-            mouseX <= buttonX + buttonSize &&
-            mouseY >= buttonY &&
-            mouseY <= buttonY + buttonSize;
-          const color = isHovered ? 0xffff5555 : 0xffff0000;
-          Renderer.drawRect(color, buttonX, buttonY, buttonSize, buttonSize);
-          Renderer.drawRect(0xff000000, buttonX, buttonY, buttonSize, 1);
-          Renderer.drawRect(
-            0xff000000,
-            buttonX,
-            buttonY + buttonSize - 1,
-            buttonSize,
-            1
-          );
-          Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonSize);
-          Renderer.drawRect(
-            0xff000000,
-            buttonX + buttonSize - 1,
-            buttonY,
-            1,
-            buttonSize
-          );
-          const xTextWidth = Renderer.getStringWidth("X");
-          Renderer.drawStringWithShadow(
-            "§fX",
-            buttonX + (buttonSize - xTextWidth) / 2,
-            buttonY + 4
-          );
+          const isHovered = mouseX >= buttonX && mouseX <= buttonX + buttonSize && mouseY >= buttonY && mouseY <= buttonY + buttonSize
+          const color = isHovered ? 0xffff5555 : 0xffff0000
+          Renderer.drawRect(color, buttonX, buttonY, buttonSize, buttonSize)
+          Renderer.drawRect(0xff000000, buttonX, buttonY, buttonSize, 1)
+          Renderer.drawRect(0xff000000, buttonX, buttonY + buttonSize - 1, buttonSize, 1)
+          Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonSize)
+          Renderer.drawRect(0xff000000, buttonX + buttonSize - 1, buttonY, 1, buttonSize)
+          const xTextWidth = Renderer.getStringWidth('X')
+          Renderer.drawStringWithShadow('§fX', buttonX + (buttonSize - xTextWidth) / 2, buttonY + 4)
 
           this.clearFilterButton = {
             x: buttonX,
             y: buttonY,
             width: buttonSize,
             height: buttonSize,
-          };
+          }
         } else {
-          this.clearFilterButton = null;
+          this.clearFilterButton = null
         }
 
         if (filterText !== this.filterText) {
-          this.filterText = filterText;
-          this.persistentFilterText = filterText;
-          this.updateFilteredMenus();
+          this.filterText = filterText
+          this.persistentFilterText = filterText
+          this.updateFilteredMenus()
         }
       }
 
-      currentY += 30;
+      currentY += 30
 
-      const listHeight = panelHeight - (currentY - panelY) - 70;
-      this.drawMenusList(panelX, currentY, panelWidth, listHeight);
+      const listHeight = panelHeight - (currentY - panelY) - 70
+      this.drawMenusList(panelX, currentY, panelWidth, listHeight)
 
-      const buttonY = currentY + listHeight;
-      this.drawAutoScanButton(panelX, buttonY, panelWidth);
+      const buttonY = currentY + listHeight
+      this.drawAutoScanButton(panelX, buttonY, panelWidth)
 
       const instructions = [
-        "§7Left click to edit • Right click for more options",
-        "§eCAUTION: Menus with long names might not save to Last Menu!",
-        "§eCAUTION: The speed of the buttons is dependant on your ping!",
-      ];
+        '§7Left click to edit • Right click for more options',
+        '§eCAUTION: Menus with long names might not save to Last Menu!',
+        '§eCAUTION: The speed of the buttons is dependant on your ping!',
+      ]
       instructions.forEach((instruction, index) => {
-        const instrWidth = Renderer.getStringWidth(instruction);
-        const instrX = panelX + (panelWidth - instrWidth) / 2;
-        const instrY = panelY + panelHeight - 35 + index * 10;
-        Renderer.drawStringWithShadow(instruction, instrX, instrY);
-      });
+        const instrWidth = Renderer.getStringWidth(instruction)
+        const instrX = panelX + (panelWidth - instrWidth) / 2
+        const instrY = panelY + panelHeight - 35 + index * 10
+        Renderer.drawStringWithShadow(instruction, instrX, instrY)
+      })
     } catch (error) {
-      ChatLib.chat(PREFIX + `§c[ERROR] Rendering failed: ${error.message}`);
+      ChatLib.chat(PREFIX + `§c[ERROR] Rendering failed: ${error.message}`)
     }
   }
 
   drawMenusList(panelX, listStartY, panelWidth, availableHeight) {
-    const itemHeight = 22;
-    const itemSpacing = 1;
-    const maxVisibleItems = Math.floor(
-      availableHeight / (itemHeight + itemSpacing)
-    );
-    const scrollbarWidth = 3;
-    const scrollbarMargin = 3;
-    const listWidth = panelWidth - 20;
-    const iconSize = 16;
-    const iconMargin = 4;
+    const itemHeight = 22
+    const itemSpacing = 1
+    const maxVisibleItems = Math.floor(availableHeight / (itemHeight + itemSpacing))
+    const scrollbarWidth = 3
+    const scrollbarMargin = 3
+    const listWidth = panelWidth - 20
+    const iconSize = 16
+    const iconMargin = 4
 
-    let mouseX, mouseY;
+    let mouseX, mouseY
     try {
-      mouseX = Client.getMouseX();
-      mouseY = Client.getMouseY();
+      mouseX = Client.getMouseX()
+      mouseY = Client.getMouseY()
     } catch (e) {
-      mouseX = 0;
-      mouseY = 0;
+      mouseX = 0
+      mouseY = 0
     }
 
-    this.hoveredIndex = -1;
+    this.hoveredIndex = -1
 
-    const filterText = this.filterTextField
-      ? this.filterTextField.getText().trim()
-      : "";
+    const filterText = this.filterTextField ? this.filterTextField.getText().trim() : ''
 
-    const shouldShowCreateButton =
-      this.filteredMenus.length === 0 && filterText.length > 0;
+    const shouldShowCreateButton = this.filteredMenus.length === 0 && filterText.length > 0
     if (this.filteredMenus.length === 0) {
-      const noResultsText = "§7No menus match your search";
-      const noResultsWidth = Renderer.getStringWidth(noResultsText);
-      const noResultsX = panelX + (panelWidth - noResultsWidth) / 2;
-      const noResultsY = listStartY + 20;
-      Renderer.drawStringWithShadow(noResultsText, noResultsX, noResultsY);
+      const noResultsText = '§7No menus match your search'
+      const noResultsWidth = Renderer.getStringWidth(noResultsText)
+      const noResultsX = panelX + (panelWidth - noResultsWidth) / 2
+      const noResultsY = listStartY + 20
+      Renderer.drawStringWithShadow(noResultsText, noResultsX, noResultsY)
 
       if (shouldShowCreateButton) {
-        const buttonY = listStartY + 50;
-        const buttonHeight = 25;
-        const buttonWidth = Math.min(250, panelWidth - 40);
-        const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+        const buttonY = listStartY + 50
+        const buttonHeight = 25
+        const buttonWidth = Math.min(250, panelWidth - 40)
+        const buttonX = panelX + (panelWidth - buttonWidth) / 2
 
-        const isHovered =
-          mouseX >= buttonX &&
-          mouseX <= buttonX + buttonWidth &&
-          mouseY >= buttonY &&
-          mouseY <= buttonY + buttonHeight;
+        const isHovered = mouseX >= buttonX && mouseX <= buttonX + buttonWidth && mouseY >= buttonY && mouseY <= buttonY + buttonHeight
 
-        const buttonColor = isHovered
-          ? this.colors.createButtonHover
-          : this.colors.createButton;
-        const buttonText = `§f+ Create "${filterText}"`;
+        const buttonColor = isHovered ? this.colors.createButtonHover : this.colors.createButton
+        const buttonText = `§f+ Create "${filterText}"`
 
-        Renderer.drawRect(
-          buttonColor,
-          buttonX,
-          buttonY,
-          buttonWidth,
-          buttonHeight
-        );
-        Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
-        Renderer.drawRect(
-          0xff000000,
-          buttonX,
-          buttonY + buttonHeight - 1,
-          buttonWidth,
-          1
-        );
-        Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
-        Renderer.drawRect(
-          0xff000000,
-          buttonX + buttonWidth - 1,
-          buttonY,
-          1,
-          buttonHeight
-        );
+        Renderer.drawRect(buttonColor, buttonX, buttonY, buttonWidth, buttonHeight)
+        Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1)
+        Renderer.drawRect(0xff000000, buttonX, buttonY + buttonHeight - 1, buttonWidth, 1)
+        Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight)
+        Renderer.drawRect(0xff000000, buttonX + buttonWidth - 1, buttonY, 1, buttonHeight)
 
-        const textWidth = Renderer.getStringWidth(buttonText);
-        const textX = buttonX + (buttonWidth - textWidth) / 2;
-        const textY = buttonY + (buttonHeight - 8) / 2;
-        Renderer.drawStringWithShadow(buttonText, textX, textY);
+        const textWidth = Renderer.getStringWidth(buttonText)
+        const textX = buttonX + (buttonWidth - textWidth) / 2
+        const textY = buttonY + (buttonHeight - 8) / 2
+        Renderer.drawStringWithShadow(buttonText, textX, textY)
 
         this.createButton = {
           x: buttonX,
@@ -1400,17 +1232,17 @@ class MenusVisualCache {
           height: buttonHeight,
           menuName: filterText,
           isDisabled: false,
-        };
+        }
       } else {
-        this.createButton = null;
+        this.createButton = null
       }
 
-      return;
+      return
     }
 
-    this.createButton = null;
+    this.createButton = null
 
-    const listItems = [...this.filteredMenus];
+    const listItems = [...this.filteredMenus]
     if (filterText.length > 0) {
       listItems.push({
         name: `+ Create "${filterText}"`,
@@ -1420,184 +1252,109 @@ class MenusVisualCache {
         description: null,
         menuName: filterText,
         isCreateItem: true,
-      });
+      })
     }
 
-    const startIndex = this.scrollOffset;
-    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
-    const visibleItemCount = endIndex - startIndex;
-    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing);
+    const startIndex = this.scrollOffset
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length)
+    const visibleItemCount = endIndex - startIndex
+    const actualContentHeight = visibleItemCount * (itemHeight + itemSpacing)
 
     // Draw scrollbar
     if (listItems.length > maxVisibleItems) {
-      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin;
-      const maxScrollRange = listItems.length - maxVisibleItems;
-      const scrollbarHeight = actualContentHeight;
-      Renderer.drawRect(
-        this.colors.scrollbar,
-        scrollbarX,
-        listStartY,
-        scrollbarWidth,
-        scrollbarHeight
-      );
+      const scrollbarX = panelX + panelWidth - scrollbarWidth - scrollbarMargin
+      const maxScrollRange = listItems.length - maxVisibleItems
+      const scrollbarHeight = actualContentHeight
+      Renderer.drawRect(this.colors.scrollbar, scrollbarX, listStartY, scrollbarWidth, scrollbarHeight)
 
-      const thumbHeight = Math.max(
-        10,
-        (maxVisibleItems / listItems.length) * scrollbarHeight
-      );
-      const thumbY =
-        maxScrollRange > 0
-          ? listStartY +
-            (this.scrollOffset / maxScrollRange) *
-              (scrollbarHeight - thumbHeight)
-          : listStartY;
-      Renderer.drawRect(
-        this.colors.scrollbarThumb,
-        scrollbarX,
-        thumbY,
-        scrollbarWidth,
-        thumbHeight
-      );
+      const thumbHeight = Math.max(10, (maxVisibleItems / listItems.length) * scrollbarHeight)
+      const thumbY = maxScrollRange > 0 ? listStartY + (this.scrollOffset / maxScrollRange) * (scrollbarHeight - thumbHeight) : listStartY
+      Renderer.drawRect(this.colors.scrollbarThumb, scrollbarX, thumbY, scrollbarWidth, thumbHeight)
     }
 
     for (let i = startIndex; i < endIndex; i++) {
-      const menu = listItems[i];
-      if (!menu) continue;
+      const menu = listItems[i]
+      if (!menu) continue
 
-      const listIndex = i - startIndex;
-      const itemX = panelX + 10;
-      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+      const listIndex = i - startIndex
+      const itemX = panelX + 10
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing)
 
-      const isHovered =
-        mouseX >= itemX &&
-        mouseX <= itemX + listWidth &&
-        mouseY >= itemY &&
-        mouseY <= itemY + itemHeight;
+      const isHovered = mouseX >= itemX && mouseX <= itemX + listWidth && mouseY >= itemY && mouseY <= itemY + itemHeight
 
-      if (isHovered) this.hoveredIndex = i;
+      if (isHovered) this.hoveredIndex = i
 
-      let bgColor = 0xff333333;
-      if (i === this.selectedIndex) bgColor = 0xff4caf50;
-      else if (isHovered) bgColor = 0xff555555;
-      if (menu.isPlaceholder) bgColor = 0xff4a4a00;
+      let bgColor = 0xff333333
+      if (i === this.selectedIndex) bgColor = 0xff4caf50
+      else if (isHovered) bgColor = 0xff555555
+      if (menu.isPlaceholder) bgColor = 0xff4a4a00
       if (menu.isCreateItem) {
-        bgColor = isHovered
-          ? this.colors.createButtonHover
-          : this.colors.createButton;
+        bgColor = isHovered ? this.colors.createButtonHover : this.colors.createButton
       }
 
-      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight);
+      Renderer.drawRect(bgColor, itemX, itemY, listWidth, itemHeight)
 
       try {
         if (menu.ctItem) {
-          const iconX = itemX + iconMargin;
-          const iconY = itemY + (itemHeight - iconSize) / 2;
-          menu.ctItem.draw(iconX, iconY, 1.0);
+          const iconX = itemX + iconMargin
+          const iconY = itemY + (itemHeight - iconSize) / 2
+          menu.ctItem.draw(iconX, iconY, 1.0)
         } else if (!menu.isCreateItem) {
-          this.drawFallbackIcon(
-            itemX + iconMargin,
-            itemY + (itemHeight - iconSize) / 2,
-            iconSize,
-            menu
-          );
+          this.drawFallbackIcon(itemX + iconMargin, itemY + (itemHeight - iconSize) / 2, iconSize, menu)
         }
       } catch (e) {
         if (!menu.isCreateItem) {
-          this.drawFallbackIcon(
-            itemX + iconMargin,
-            itemY + (itemHeight - iconSize) / 2,
-            iconSize,
-            menu
-          );
+          this.drawFallbackIcon(itemX + iconMargin, itemY + (itemHeight - iconSize) / 2, iconSize, menu)
         }
       }
 
-      const hasDescription =
-        menu.hasDescription &&
-        (menu.description ||
-          (menu.descriptions && menu.descriptions.length > 0));
+      const hasDescription = menu.hasDescription && (menu.description || (menu.descriptions && menu.descriptions.length > 0))
 
-      let textStartX, availableTextWidth;
+      let textStartX, availableTextWidth
 
       if (menu.isCreateItem) {
-        textStartX = itemX;
-        availableTextWidth = listWidth;
+        textStartX = itemX
+        availableTextWidth = listWidth
       } else {
-        textStartX = itemX + iconSize + iconMargin * 2;
-        availableTextWidth = listWidth - iconSize - iconMargin * 3;
+        textStartX = itemX + iconSize + iconMargin * 2
+        availableTextWidth = listWidth - iconSize - iconMargin * 3
       }
 
-      const nameColor = menu.isCreateItem
-        ? "§f"
-        : i === this.selectedIndex
-        ? "§a"
-        : isHovered
-        ? "§e"
-        : menu.isPlaceholder
-        ? "§6"
-        : "§f";
-      const menuName = menu.name || "Unknown Menu";
+      const nameColor = menu.isCreateItem ? '§f' : i === this.selectedIndex ? '§a' : isHovered ? '§e' : menu.isPlaceholder ? '§6' : '§f'
+      const menuName = menu.name || 'Unknown Menu'
 
       if (menu.isCreateItem) {
-        const textWidth = Renderer.getStringWidth(menuName);
-        const centerX = textStartX + (availableTextWidth - textWidth) / 2;
-        Renderer.drawStringWithShadow(
-          nameColor + menuName,
-          centerX,
-          itemY + (itemHeight - 8) / 2
-        );
+        const textWidth = Renderer.getStringWidth(menuName)
+        const centerX = textStartX + (availableTextWidth - textWidth) / 2
+        Renderer.drawStringWithShadow(nameColor + menuName, centerX, itemY + (itemHeight - 8) / 2)
       } else {
-        const pageCounter = menu.page ? `§8[P${menu.page}]` : "";
-        const pageCounterWidth = menu.page
-          ? Renderer.getStringWidth(`[P${menu.page}]`)
-          : 0;
+        const pageCounter = menu.page ? `§8[P${menu.page}]` : ''
+        const pageCounterWidth = menu.page ? Renderer.getStringWidth(`[P${menu.page}]`) : 0
 
-        const maxCharsForName =
-          Math.floor((availableTextWidth - pageCounterWidth - 10) / 6) - 2;
-        const displayName =
-          menuName.length > maxCharsForName
-            ? menuName.substring(0, maxCharsForName - 3) + "..."
-            : menuName;
+        const maxCharsForName = Math.floor((availableTextWidth - pageCounterWidth - 10) / 6) - 2
+        const displayName = menuName.length > maxCharsForName ? menuName.substring(0, maxCharsForName - 3) + '...' : menuName
 
-        const finalDisplayName = menu.isPlaceholder
-          ? displayName + " §8[NEW]"
-          : displayName;
+        const finalDisplayName = menu.isPlaceholder ? displayName + ' §8[NEW]' : displayName
 
         if (hasDescription) {
-          Renderer.drawStringWithShadow(
-            nameColor + finalDisplayName,
-            textStartX,
-            itemY + 2
-          );
+          Renderer.drawStringWithShadow(nameColor + finalDisplayName, textStartX, itemY + 2)
         } else {
-          Renderer.drawStringWithShadow(
-            nameColor + finalDisplayName,
-            textStartX,
-            itemY + (itemHeight - 8) / 2
-          );
+          Renderer.drawStringWithShadow(nameColor + finalDisplayName, textStartX, itemY + (itemHeight - 8) / 2)
         }
 
         if (menu.page) {
-          const pageX = itemX + listWidth - pageCounterWidth - 5;
-          const pageY = itemY + (itemHeight - 8) / 2;
-          Renderer.drawStringWithShadow(pageCounter, pageX, pageY);
+          const pageX = itemX + listWidth - pageCounterWidth - 5
+          const pageY = itemY + (itemHeight - 8) / 2
+          Renderer.drawStringWithShadow(pageCounter, pageX, pageY)
         }
 
         if (hasDescription) {
-          let descriptionText =
-            menu.description || (menu.descriptions && menu.descriptions[0]);
+          let descriptionText = menu.description || (menu.descriptions && menu.descriptions[0])
           if (descriptionText) {
-            const descText = `§7${descriptionText}`;
-            const maxDescLength = Math.floor(availableTextWidth / 6);
-            const finalDescText =
-              descText.length > maxDescLength
-                ? descText.substring(0, maxDescLength - 3) + "..."
-                : descText;
-            Renderer.drawStringWithShadow(
-              finalDescText,
-              textStartX,
-              itemY + 12
-            );
+            const descText = `§7${descriptionText}`
+            const maxDescLength = Math.floor(availableTextWidth / 6)
+            const finalDescText = descText.length > maxDescLength ? descText.substring(0, maxDescLength - 3) + '...' : descText
+            Renderer.drawStringWithShadow(finalDescText, textStartX, itemY + 12)
           }
         }
       }
@@ -1605,60 +1362,56 @@ class MenusVisualCache {
   }
 
   drawFallbackIcon(x, y, size, menu) {
-    let color = 0xff666666;
+    let color = 0xff666666
 
     if (menu.isPlaceholder) {
-      color = 0xffffaa00; // Orange for new menus
+      color = 0xffffaa00 // Orange for new menus
     } else if (menu.name) {
-      let hash = 0;
+      let hash = 0
       for (let i = 0; i < menu.name.length; i++) {
-        hash = menu.name.charCodeAt(i) + ((hash << 5) - hash);
+        hash = menu.name.charCodeAt(i) + ((hash << 5) - hash)
       }
 
       // don't make colors too dark
-      const r = (Math.abs(hash) % 128) + 127;
-      const g = (Math.abs(hash >> 8) % 128) + 127;
-      const b = (Math.abs(hash >> 16) % 128) + 127;
+      const r = (Math.abs(hash) % 128) + 127
+      const g = (Math.abs(hash >> 8) % 128) + 127
+      const b = (Math.abs(hash >> 16) % 128) + 127
 
-      color = (0xff << 24) | (r << 16) | (g << 8) | b;
+      color = (0xff << 24) | (r << 16) | (g << 8) | b
     }
 
-    Renderer.drawRect(color, x, y, size, size);
+    Renderer.drawRect(color, x, y, size, size)
 
     // Draw a border
-    Renderer.drawRect(0xff000000, x, y, size, 1); // top
-    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1); // bottom
-    Renderer.drawRect(0xff000000, x, y, 1, size); // left
-    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size); // right
+    Renderer.drawRect(0xff000000, x, y, size, 1) // top
+    Renderer.drawRect(0xff000000, x, y + size - 1, size, 1) // bottom
+    Renderer.drawRect(0xff000000, x, y, 1, size) // left
+    Renderer.drawRect(0xff000000, x + size - 1, y, 1, size) // right
 
     if (menu.name && menu.name.length > 0) {
-      const letter = menu.name.charAt(0).toUpperCase();
-      const letterWidth = Renderer.getStringWidth(letter);
-      const centerX = x + (size - letterWidth) / 2;
-      const centerY = y + (size - 8) / 2;
-      Renderer.drawStringWithShadow("§f" + letter, centerX, centerY);
+      const letter = menu.name.charAt(0).toUpperCase()
+      const letterWidth = Renderer.getStringWidth(letter)
+      const centerX = x + (size - letterWidth) / 2
+      const centerY = y + (size - 8) / 2
+      Renderer.drawStringWithShadow('§f' + letter, centerX, centerY)
     }
   }
 
   drawAutoScanButton(panelX, buttonY, panelWidth) {
-    const buttonHeight = 20;
-    const buttonWidth = 120;
-    const buttonX = panelX + (panelWidth - buttonWidth) / 2;
+    const buttonHeight = 20
+    const buttonWidth = 120
+    const buttonX = panelX + (panelWidth - buttonWidth) / 2
 
-    let mouseX, mouseY;
+    let mouseX, mouseY
     try {
-      mouseX = Client.getMouseX();
-      mouseY = Client.getMouseY();
+      mouseX = Client.getMouseX()
+      mouseY = Client.getMouseY()
     } catch (e) {
-      mouseX = 0;
-      mouseY = 0;
+      mouseX = 0
+      mouseY = 0
     }
 
-    const isHovered =
-      mouseX >= buttonX &&
-      mouseX <= buttonX + buttonWidth &&
-      mouseY >= buttonY &&
-      mouseY <= buttonY + buttonHeight;
+    const isHovered = mouseX >= buttonX && mouseX <= buttonX + buttonWidth && mouseY >= buttonY && mouseY <= buttonY + buttonHeight
 
     const buttonColor = this.isAutoScanning
       ? isHovered
@@ -1666,53 +1419,34 @@ class MenusVisualCache {
         : this.colors.scanButtonHover
       : isHovered
       ? this.colors.scanButtonHover
-      : this.colors.scanButton;
+      : this.colors.scanButton
 
-    const buttonText = this.isAutoScanning
-      ? "§fStop Scanning"
-      : "§fScan All Pages";
+    const buttonText = this.isAutoScanning ? '§fStop Scanning' : '§fScan All Pages'
 
-    Renderer.drawRect(buttonColor, buttonX, buttonY, buttonWidth, buttonHeight);
-    Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
-    Renderer.drawRect(
-      0xff000000,
-      buttonX,
-      buttonY + buttonHeight - 1,
-      buttonWidth,
-      1
-    );
-    Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight);
-    Renderer.drawRect(
-      0xff000000,
-      buttonX + buttonWidth - 1,
-      buttonY,
-      1,
-      buttonHeight
-    );
+    Renderer.drawRect(buttonColor, buttonX, buttonY, buttonWidth, buttonHeight)
+    Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1)
+    Renderer.drawRect(0xff000000, buttonX, buttonY + buttonHeight - 1, buttonWidth, 1)
+    Renderer.drawRect(0xff000000, buttonX, buttonY, 1, buttonHeight)
+    Renderer.drawRect(0xff000000, buttonX + buttonWidth - 1, buttonY, 1, buttonHeight)
 
-    const textWidth = Renderer.getStringWidth(buttonText);
-    const textX = buttonX + (buttonWidth - textWidth) / 2;
-    const textY = buttonY + (buttonHeight - 8) / 2;
-    Renderer.drawStringWithShadow(buttonText, textX, textY);
+    const textWidth = Renderer.getStringWidth(buttonText)
+    const textX = buttonX + (buttonWidth - textWidth) / 2
+    const textY = buttonY + (buttonHeight - 8) / 2
+    Renderer.drawStringWithShadow(buttonText, textX, textY)
 
     this.autoScanButton = {
       x: buttonX,
       y: buttonY,
       width: buttonWidth,
       height: buttonHeight,
-    };
+    }
   }
 
   handleMouseClick(mouseX, mouseY, button) {
-    if (!this.isActive) return false;
+    if (!this.isActive) return false
 
-    const panelDims = this.calculatePanelDimensions();
-    const {
-      width: panelWidth,
-      height: panelHeight,
-      x: panelX,
-      y: panelY,
-    } = panelDims;
+    const panelDims = this.calculatePanelDimensions()
+    const { width: panelWidth, height: panelHeight, x: panelX, y: panelY } = panelDims
 
     if (
       this.clearFilterButton &&
@@ -1723,16 +1457,16 @@ class MenusVisualCache {
       mouseY <= this.clearFilterButton.y + this.clearFilterButton.height
     ) {
       if (this.filterTextField) {
-        this.filterTextField.setText("");
-        this.persistentFilterText = "";
-        this.filterTextField.setIsFocused(false);
-        this.updateFilteredMenus();
+        this.filterTextField.setText('')
+        this.persistentFilterText = ''
+        this.filterTextField.setIsFocused(false)
+        this.updateFilteredMenus()
       }
-      return true;
+      return true
     }
 
     if (this.dropdown.isVisible) {
-      return this.handleDropdownClick(mouseX, mouseY);
+      return this.handleDropdownClick(mouseX, mouseY)
     }
 
     if (
@@ -1744,16 +1478,14 @@ class MenusVisualCache {
       mouseY <= this.createButton.y + this.createButton.height
     ) {
       if (!this.createButton.isDisabled) {
-        const menuName = this.createButton.menuName;
+        const menuName = this.createButton.menuName
         if (menuName && menuName.trim().length > 0) {
-          this.createMenu(menuName);
+          this.createMenu(menuName)
         }
       } else {
-        ChatLib.chat(
-          PREFIX + `§cPlease scan all pages before creating new menus!`
-        );
+        ChatLib.chat(PREFIX + `§cPlease scan all pages before creating new menus!`)
       }
-      return true;
+      return true
     }
 
     if (
@@ -1765,150 +1497,130 @@ class MenusVisualCache {
       mouseY <= this.autoScanButton.y + this.autoScanButton.height
     ) {
       if (this.isAutoScanning) {
-        this.stopAutoScan();
+        this.stopAutoScan()
       } else {
-        this.startAutoScan();
+        this.startAutoScan()
       }
-      return true;
+      return true
     }
 
     if (this.filterTextField && button === 0) {
-      this.filterTextField.mouseClicked(mouseX, mouseY, button);
+      this.filterTextField.mouseClicked(mouseX, mouseY, button)
     }
 
-    let currentY = panelY + 10;
-    currentY += 20;
-    currentY += 30;
-    const listStartY = currentY;
+    let currentY = panelY + 10
+    currentY += 20
+    currentY += 30
+    const listStartY = currentY
 
-    const itemHeight = 22;
-    const itemSpacing = 1;
-    const listWidth = panelWidth - 20;
-    const availableHeight = panelHeight - 130;
-    const maxVisibleItems = Math.floor(
-      availableHeight / (itemHeight + itemSpacing)
-    );
-    const startIndex = this.scrollOffset;
+    const itemHeight = 22
+    const itemSpacing = 1
+    const listWidth = panelWidth - 20
+    const availableHeight = panelHeight - 130
+    const maxVisibleItems = Math.floor(availableHeight / (itemHeight + itemSpacing))
+    const startIndex = this.scrollOffset
 
-    let listItems = [...this.filteredMenus];
-    const filterText = this.filterTextField
-      ? this.filterTextField.getText().trim()
-      : "";
+    let listItems = [...this.filteredMenus]
+    const filterText = this.filterTextField ? this.filterTextField.getText().trim() : ''
 
     if (filterText.length > 0) {
       listItems.push({
         name: `+ Create "${filterText}"`,
         isCreateItem: true,
         menuName: filterText,
-      });
+      })
     }
 
-    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length);
+    const endIndex = Math.min(startIndex + maxVisibleItems, listItems.length)
 
     for (let i = startIndex; i < endIndex; i++) {
-      const menu = listItems[i];
-      if (!menu) continue;
+      const menu = listItems[i]
+      if (!menu) continue
 
-      const listIndex = i - startIndex;
-      const itemX = panelX + 10;
-      const itemY = listStartY + listIndex * (itemHeight + itemSpacing);
+      const listIndex = i - startIndex
+      const itemX = panelX + 10
+      const itemY = listStartY + listIndex * (itemHeight + itemSpacing)
 
-      if (
-        mouseX >= itemX &&
-        mouseX <= itemX + listWidth &&
-        mouseY >= itemY &&
-        mouseY <= itemY + itemHeight
-      ) {
+      if (mouseX >= itemX && mouseX <= itemX + listWidth && mouseY >= itemY && mouseY <= itemY + itemHeight) {
         if (menu.isCreateItem) {
           if (button === 0) {
-            const currentFilterText = this.filterTextField
-              ? this.filterTextField.getText().trim()
-              : "";
+            const currentFilterText = this.filterTextField ? this.filterTextField.getText().trim() : ''
 
             if (!currentFilterText || currentFilterText.length === 0) {
-              ChatLib.chat(PREFIX + `§cNo menu name entered!`);
-              return true;
+              ChatLib.chat(PREFIX + `§cNo menu name entered!`)
+              return true
             }
 
-            const existingMenu = this.cachedMenus.find(
-              (m) => m.name === currentFilterText
-            );
+            const existingMenu = this.cachedMenus.find(m => m.name === currentFilterText)
             if (existingMenu) {
-              ChatLib.chat(
-                PREFIX + `§cMenu "${currentFilterText}" already exists!`
-              );
-              return true;
+              ChatLib.chat(PREFIX + `§cMenu "${currentFilterText}" already exists!`)
+              return true
             }
 
-            ChatLib.chat(PREFIX + `§aCreating menu: "${currentFilterText}"`);
-            ChatLib.command(`menu create ${currentFilterText}`);
+            ChatLib.chat(PREFIX + `§aCreating menu: "${currentFilterText}"`)
+            ChatLib.command(`menu create ${currentFilterText}`)
 
             setTimeout(() => {
               if (this.filterTextField) {
-                this.filterTextField.setText("");
-                this.filterText = "";
-                this.persistentFilterText = "";
-                this.updateFilteredMenus();
+                this.filterTextField.setText('')
+                this.filterText = ''
+                this.persistentFilterText = ''
+                this.updateFilteredMenus()
               }
-            }, 100);
+            }, 100)
 
-            return true;
+            return true
           }
-          return true;
+          return true
         } else {
           // Regular menu item
-          this.selectedIndex = i;
+          this.selectedIndex = i
           if (button === 0) {
-            this.editMenu(menu);
+            this.editMenu(menu)
           } else if (button === 1) {
-            this.showDropdown(menu, mouseX, mouseY);
+            this.showDropdown(menu, mouseX, mouseY)
           }
-          return true;
+          return true
         }
       }
     }
 
-    if (
-      mouseX >= panelX &&
-      mouseX <= panelX + panelWidth &&
-      mouseY >= panelY &&
-      mouseY <= panelY + panelHeight
-    ) {
-      return true;
+    if (mouseX >= panelX && mouseX <= panelX + panelWidth && mouseY >= panelY && mouseY <= panelY + panelHeight) {
+      return true
     }
 
-    return false;
+    return false
   }
 
   createMenu(menuName) {
     if (menuName && menuName.trim().length > 0) {
-      let cleanName = menuName;
+      let cleanName = menuName
       if (cleanName.startsWith('+ Create "') && cleanName.endsWith('"')) {
-        cleanName = cleanName.replace(/^\+ Create "/, "").replace(/"$/, "");
+        cleanName = cleanName.replace(/^\+ Create "/, '').replace(/"$/, '')
       }
 
       if (cleanName.trim().length === 0) {
-        ChatLib.chat(PREFIX + `§cMenu name cannot be empty!`);
-        return;
+        ChatLib.chat(PREFIX + `§cMenu name cannot be empty!`)
+        return
       }
 
-      const existingMenu = this.cachedMenus.find((m) => m.name === cleanName);
+      const existingMenu = this.cachedMenus.find(m => m.name === cleanName)
       if (existingMenu) {
-        ChatLib.chat(PREFIX + `§cMenu "${cleanName}" already exists!`);
-        return;
+        ChatLib.chat(PREFIX + `§cMenu "${cleanName}" already exists!`)
+        return
       }
 
-      ChatLib.chat(PREFIX + `§aCreating new menu: "${cleanName}"`);
-      ChatLib.command(`menu create ${cleanName}`);
+      ChatLib.chat(PREFIX + `§aCreating new menu: "${cleanName}"`)
+      ChatLib.command(`menu create ${cleanName}`)
 
       if (this.filterTextField) {
-        this.filterTextField.setText("");
-        this.filterText = "";
-        this.persistentFilterText = "";
-        this.updateFilteredMenus();
+        this.filterTextField.setText('')
+        this.filterText = ''
+        this.persistentFilterText = ''
+        this.updateFilteredMenus()
       }
     } else {
-      ChatLib.chat(PREFIX + `§cInvalid menu name!`);
+      ChatLib.chat(PREFIX + `§cInvalid menu name!`)
     }
   }
 
@@ -1917,159 +1629,152 @@ class MenusVisualCache {
     if (this.dropdown.isVisible) {
       if (keyCode === 1) {
         // ESC - close dropdown
-        this.hideDropdown();
-        return true;
+        this.hideDropdown()
+        return true
       } else if (keyCode === 200) {
         // Up arrow - navigate dropdown up
         if (this.dropdown.hoveredOption > 0) {
-          this.dropdown.hoveredOption--;
+          this.dropdown.hoveredOption--
         } else {
-          this.dropdown.hoveredOption = this.dropdown.options.length - 1;
+          this.dropdown.hoveredOption = this.dropdown.options.length - 1
         }
-        return true;
+        return true
       } else if (keyCode === 208) {
         // Down arrow - navigate dropdown down
         if (this.dropdown.hoveredOption < this.dropdown.options.length - 1) {
-          this.dropdown.hoveredOption++;
+          this.dropdown.hoveredOption++
         } else {
-          this.dropdown.hoveredOption = 0;
+          this.dropdown.hoveredOption = 0
         }
-        return true;
+        return true
       } else if (keyCode === 28) {
         // Enter - execute dropdown option
         if (this.dropdown.hoveredOption >= 0) {
-          const option = this.dropdown.options[this.dropdown.hoveredOption];
-          const menu = this.dropdown.menu;
+          const option = this.dropdown.options[this.dropdown.hoveredOption]
+          const menu = this.dropdown.menu
 
           // Handle delete confirmation with Enter key
-          if (option.action === "delete") {
+          if (option.action === 'delete') {
             if (this.dropdown.deleteConfirmationActive) {
-              optionText = "CONFIRM";
-              textColor = "§c§l";
-              backgroundColor = isHovered
-                ? this.colors.deleteConfirmationHover
-                : this.colors.deleteConfirmation;
+              optionText = 'CONFIRM'
+              textColor = '§c§l'
+              backgroundColor = isHovered ? this.colors.deleteConfirmationHover : this.colors.deleteConfirmation
             } else {
-              backgroundColor = isHovered
-                ? this.colors.dropdownHover
-                : 0x00000000;
+              backgroundColor = isHovered ? this.colors.dropdownHover : 0x00000000
             }
           } else {
-            this.executeDropdownAction(option.action, menu);
-            this.hideDropdown();
+            this.executeDropdownAction(option.action, menu)
+            this.hideDropdown()
           }
         }
-        return true;
+        return true
       }
-      return true;
+      return true
     }
 
     // Rest of the existing handleKeyPress logic...
     if (this.filterTextField && this.filterTextField.isFocused()) {
       if (keyCode === 1) {
         // ESC
-        this.filterTextField.setIsFocused(false);
-        this.hideOverlay();
-        return true;
+        this.filterTextField.setIsFocused(false)
+        this.hideOverlay()
+        return true
       } else if (keyCode === 28) {
         // Enter
-        this.filterTextField.setIsFocused(false);
-        return true;
+        this.filterTextField.setIsFocused(false)
+        return true
       } else if (keyCode === 15) {
         // Tab
-        this.filterTextField.setIsFocused(false);
-        return true;
+        this.filterTextField.setIsFocused(false)
+        return true
       }
 
-      this.filterTextField.keyTyped(char, keyCode);
-      return true;
+      this.filterTextField.keyTyped(char, keyCode)
+      return true
     }
 
     if (keyCode === 1) {
       // ESC
-      this.hideOverlay();
-      return true;
+      this.hideOverlay()
+      return true
     } else if (keyCode === 200) {
       // Up arrow
-      this.navigateUp();
-      return true;
+      this.navigateUp()
+      return true
     } else if (keyCode === 208) {
       // Down arrow
-      this.navigateDown();
-      return true;
+      this.navigateDown()
+      return true
     } else if (keyCode === 28) {
       // Enter
-      if (
-        this.selectedIndex >= 0 &&
-        this.selectedIndex < this.filteredMenus.length
-      ) {
-        this.editMenu(this.filteredMenus[this.selectedIndex]);
-        return true;
+      if (this.selectedIndex >= 0 && this.selectedIndex < this.filteredMenus.length) {
+        this.editMenu(this.filteredMenus[this.selectedIndex])
+        return true
       }
     } else if (keyCode === 57) {
       // Space bar - toggle auto-scan
       if (this.isAutoScanning) {
-        this.stopAutoScan();
+        this.stopAutoScan()
       } else {
-        this.startAutoScan();
+        this.startAutoScan()
       }
-      return true;
+      return true
     }
 
-    return true;
+    return true
   }
 
   navigateUp() {
     if (this.selectedIndex > 0) {
-      this.selectedIndex--;
-      this.ensureVisible();
+      this.selectedIndex--
+      this.ensureVisible()
     } else if (this.selectedIndex === -1 && this.filteredMenus.length > 0) {
-      this.selectedIndex = 0;
+      this.selectedIndex = 0
     }
   }
 
   navigateDown() {
     if (this.selectedIndex < this.filteredMenus.length - 1) {
-      this.selectedIndex++;
-      this.ensureVisible();
+      this.selectedIndex++
+      this.ensureVisible()
     } else if (this.selectedIndex === -1 && this.filteredMenus.length > 0) {
-      this.selectedIndex = 0;
+      this.selectedIndex = 0
     }
   }
 
   ensureVisible() {
-    const availableHeight = this.getListAvailableHeight();
-    const itemHeight = 23;
-    const maxVisibleItems = Math.floor(availableHeight / itemHeight);
+    const availableHeight = this.getListAvailableHeight()
+    const itemHeight = 23
+    const maxVisibleItems = Math.floor(availableHeight / itemHeight)
 
     if (this.selectedIndex < this.scrollOffset) {
-      this.scrollOffset = this.selectedIndex;
+      this.scrollOffset = this.selectedIndex
     } else if (this.selectedIndex >= this.scrollOffset + maxVisibleItems) {
-      this.scrollOffset = this.selectedIndex - maxVisibleItems + 1;
+      this.scrollOffset = this.selectedIndex - maxVisibleItems + 1
     }
 
-    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems);
-    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll));
+    const maxScroll = Math.max(0, this.filteredMenus.length - maxVisibleItems)
+    this.scrollOffset = Math.max(0, Math.min(this.scrollOffset, maxScroll))
   }
 
   editMenu(menu) {
-    ChatLib.command(`menu edit ${menu.name}`);
+    ChatLib.command(`menu edit ${menu.name}`)
   }
 
   hideOverlay() {
-    this.isActive = false;
-    this.hoveredIndex = -1;
-    this.selectedIndex = -1;
-    this.scrollOffset = 0;
-    this.isScanning = false;
-    this.scrollbarDragging = false;
-    this.filterTextField = null;
-    this.initializeTextField = true;
+    this.isActive = false
+    this.hoveredIndex = -1
+    this.selectedIndex = -1
+    this.scrollOffset = 0
+    this.isScanning = false
+    this.scrollbarDragging = false
+    this.filterTextField = null
+    this.initializeTextField = true
 
-    this.hideDropdown();
+    this.hideDropdown()
 
-    this.restoreAllKeybinds();
+    this.restoreAllKeybinds()
   }
 }
 
-export const menusVisualCache = new MenusVisualCache();
+export const menusVisualCache = new MenusVisualCache()
