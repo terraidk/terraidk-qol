@@ -201,10 +201,8 @@ function setupRichPresence() {
   }
 
   presence.startTimestamp = Math.floor(startTime / 1000)
-  presence.largeImageKey = 'minecraft'
-  presence.largeImageText = "terraidk's QoL"
-  presence.smallImageKey = 'tqol'
-  presence.smallImageText = `v${getLocalVersion()}`
+  presence.largeImageKey = "tqol";
+  presence.largeImageText = `v${getLocalVersion()}`;
 
   return presence
 }

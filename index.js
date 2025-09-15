@@ -77,9 +77,8 @@ register('worldLoad', () => {
       )
 
       if (!hasCheckedForUpdate) {
-        console.log('Running update check for first time')
-        hasCheckedForUpdate = true
-        checkForUpdate()
+        hasCheckedForUpdate = true;
+        checkForUpdate();
       }
     }, 500)
   }
