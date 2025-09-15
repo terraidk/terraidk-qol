@@ -99,15 +99,25 @@ register('command', (command, ...args) => {
   }
 
   const COMMAND_LIST = getEnabledCommands()
+  // Sort commands (alphabetically) on category
+  COMMAND_LIST.sort((a, b) => a.category.localeCompare(b.category))
+
   let filter = args.join(' ').toLowerCase()
   const filtered = filter ? COMMAND_LIST.filter(cmd => cmd.syntax.toLowerCase().includes(filter)) : COMMAND_LIST
 
   ChatLib.chat('&8&m----------------&r ' + "&9[&aterraidk's QoL&r&9]&r " + '&8&m----------------')
-  filtered.forEach(cmd => ChatLib.chat('&a' + cmd.syntax + ' &7 ' + cmd.description))
 
-  // todo: sort on category and print by category
+  let currentCategory = ''
 
-  ChatLib.chat('\n&b/tqol help [filter] &7 View more or filter')
+  filtered.forEach(cmd => {
+    // Only print the category header when it changes from the previous command
+    if (cmd.category !== currentCategory) ChatLib.chat('\n&2&l' + cmd.category.toUpperCase())
+
+    ChatLib.chat('&a' + cmd.syntax + ' &7 ' + cmd.description)
+    currentCategory = cmd.category
+  })
+
+  ChatLib.chat('\n&b/tqol help [filter] &7 Show only certain commands')
   ChatLib.chat('&b/tqol config &7 Enable/disable commands')
   ChatLib.chat('&8&m-----------------------------------------------')
 })
