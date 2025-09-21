@@ -15,5 +15,7 @@
   "enableCommand": true,
   "enableCommandAliases": true,
   "enableMenu": true,
-  "enableMenuAliases": true
+  "enableMenuAliases": true,
+  "enableShowHousingCommands": true,
+  "enableHousingCommandScan": true
 }
