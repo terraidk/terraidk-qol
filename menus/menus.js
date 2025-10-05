@@ -300,6 +300,7 @@ class BaseInventoryCache {
                 ],
                 commands: {
                     create: "create",
+                    actions: "command actions",
                     edit: "edit",
                     delete: "delete",
                     list: "list",
@@ -459,6 +460,48 @@ class BaseInventoryCache {
             }
         });
 
+        register("guiMouseDrag", (mouseX, mouseY, button) => {
+            if (
+                this.state.isActive &&
+                this.state.scrollbarDragging &&
+                button === 0
+            ) {
+                const panelDims = this.calculatePanelDimensions();
+                const listStartY = panelDims.y + 60;
+                const listHeight = panelDims.height - 130;
+                const itemHeight = 23;
+                const maxVisibleItems = Math.floor(listHeight / itemHeight);
+
+                let totalItems = this.state.filteredItems.length;
+                const maxScrollRange = Math.max(
+                    0,
+                    totalItems - maxVisibleItems
+                );
+
+                if (maxScrollRange > 0) {
+                    const scrollbarHeight = listHeight;
+                    const thumbHeight = Math.max(
+                        10,
+                        (maxVisibleItems / totalItems) * scrollbarHeight
+                    );
+                    const scrollRange = scrollbarHeight - thumbHeight;
+                    const dragDistance =
+                        mouseY - this.state.scrollbarDragStartY;
+                    let newOffset =
+                        this.state.scrollbarDragStartOffset +
+                        Math.round(
+                            (dragDistance / scrollRange) * maxScrollRange
+                        );
+                    newOffset = Math.max(
+                        0,
+                        Math.min(newOffset, maxScrollRange)
+                    );
+                    this.state.scrollOffset = newOffset;
+                }
+                return true;
+            }
+        });
+
         register("guiMouseRelease", (mouseX, mouseY, button) => {
             if (
                 this.state.isActive &&
@@ -482,6 +525,48 @@ class BaseInventoryCache {
                 if (scroll !== 0) this.handleMouseScroll(scroll > 0 ? -1 : 1);
             }
         }).setFps(60);
+
+        register("guiRender", () => {
+            if (this.state.isActive && this.state.scrollbarDragging) {
+                let mouseY = 0;
+                try {
+                    mouseY = Client.getMouseY();
+                } catch (e) {}
+
+                const panelDims = this.calculatePanelDimensions();
+                const listStartY = panelDims.y + 60;
+                const listHeight = panelDims.height - 130;
+                const itemHeight = 23;
+                const maxVisibleItems = Math.floor(listHeight / itemHeight);
+
+                let totalItems = this.state.filteredItems.length;
+                const maxScrollRange = Math.max(
+                    0,
+                    totalItems - maxVisibleItems
+                );
+
+                if (maxScrollRange > 0) {
+                    const scrollbarHeight = listHeight;
+                    const thumbHeight = Math.max(
+                        10,
+                        (maxVisibleItems / totalItems) * scrollbarHeight
+                    );
+                    const scrollRange = scrollbarHeight - thumbHeight;
+                    const dragDistance =
+                        mouseY - this.state.scrollbarDragStartY;
+                    let newOffset =
+                        this.state.scrollbarDragStartOffset +
+                        Math.round(
+                            (dragDistance / scrollRange) * maxScrollRange
+                        );
+                    newOffset = Math.max(
+                        0,
+                        Math.min(newOffset, maxScrollRange)
+                    );
+                    this.state.scrollOffset = newOffset;
+                }
+            }
+        });
     }
 
     // Utility Methods
@@ -695,11 +780,21 @@ class BaseInventoryCache {
         }
     }
 
-    // Action Methods (Override in subclasses)
+    getDefaultAction() {
+        try {
+            const title = (this.config.title || "").toLowerCase();
+            if (title.includes("command")) return "actions";
+        } catch (e) {}
+        return "edit";
+    }
+
     executeAction(action, item) {
         switch (action) {
             case "edit":
                 ChatLib.command(`${this.config.commands.edit} ${item.name}`);
+                break;
+            case "actions":
+                ChatLib.command(`${this.config.commands.actions} ${item.name}`);
                 break;
             case "delete":
                 ChatLib.command(`${this.config.commands.delete} ${item.name}`);
@@ -904,7 +999,19 @@ class BaseInventoryCache {
                             : listStartY;
 
                     if (mouseY >= thumbY && mouseY <= thumbY + thumbHeight) {
-                        // Start dragging scrollbar thumb
+                        // Start dragging
+                        this.state.scrollbarDragging = true;
+                        this.state.scrollbarDragStartY = mouseY;
+                        this.state.scrollbarDragStartOffset =
+                            this.state.scrollOffset;
+                        return true;
+                    } else {
+                        // Click outside thumb - jump to position
+                        const clickRatio =
+                            (mouseY - listStartY) / scrollbarHeight;
+                        this.state.scrollOffset = Math.round(
+                            clickRatio * maxScrollRange
+                        );
                         this.state.scrollOffset = Math.max(
                             0,
                             Math.min(this.state.scrollOffset, maxScrollRange)
@@ -1007,7 +1114,7 @@ class BaseInventoryCache {
                 } else {
                     this.state.selectedIndex = i;
                     if (button === 0) {
-                        this.executeAction("edit", item);
+                        this.executeAction(this.getDefaultAction(), item);
                     } else if (button === 1) {
                         this.ui.dropdown.show(item, mouseX, mouseY);
                     }
@@ -1060,6 +1167,28 @@ class BaseInventoryCache {
         }
 
         return false;
+    }
+
+    handleMouseDrag(mouseX, mouseY) {
+        if (this.state.scrollbarDragging && this.state.scrollbarThumb) {
+            const { y, height, listItems, maxVisibleItems } =
+                this.state.scrollbarThumb;
+            const deltaY = mouseY - this.state.scrollbarDragStartY;
+            const totalScrollable = listItems.length - maxVisibleItems;
+
+            if (totalScrollable > 0) {
+                const scrollRatio =
+                    deltaY / (height - this.state.scrollbarThumb.height);
+                this.state.scrollOffset = Math.max(
+                    0,
+                    Math.min(
+                        this.state.scrollbarDragStartOffset +
+                            Math.round(scrollRatio * totalScrollable),
+                        totalScrollable
+                    )
+                );
+            }
+        }
     }
 
     createItem(itemName) {
@@ -1147,7 +1276,7 @@ class BaseInventoryCache {
                 this.state.selectedIndex < this.state.filteredItems.length
             ) {
                 this.executeAction(
-                    "edit",
+                    this.getDefaultAction(),
                     this.state.filteredItems[this.state.selectedIndex]
                 );
                 return true;
@@ -1771,7 +1900,6 @@ class BaseInventoryCache {
         };
     }
 
-    // Enhanced drawItemsList to include create item in list and scrollbar
     drawItemsList(panelX, listStartY, panelWidth, availableHeight) {
         const itemHeight = 22;
         const itemSpacing = 1;
@@ -1795,7 +1923,6 @@ class BaseInventoryCache {
             ? this.ui.filterTextField.getText().trim()
             : "";
 
-        // Add create item to list if there's filter text
         let listItems = [...this.state.filteredItems];
         if (filterText.length > 0) {
             const existingItem = this.state.cachedItems.find(
@@ -1811,87 +1938,13 @@ class BaseInventoryCache {
             }
         }
 
-        // No results case
         if (listItems.length === 0) {
-            const noResultsText = "§7No items match your search";
-            const noResultsWidth = Renderer.getStringWidth(noResultsText);
-            const noResultsX = panelX + (panelWidth - noResultsWidth) / 2;
-            const noResultsY = listStartY + 20;
-            Renderer.drawStringWithShadow(
-                noResultsText,
-                noResultsX,
-                noResultsY
-            );
-
-            // Draw separate create button when no results
-            if (filterText.length > 0) {
-                const buttonY = listStartY + 50;
-                const buttonHeight = 25;
-                const buttonWidth = Math.min(250, panelWidth - 40);
-                const buttonX = panelX + (panelWidth - buttonWidth) / 2;
-
-                const isHovered =
-                    mouseX >= buttonX &&
-                    mouseX <= buttonX + buttonWidth &&
-                    mouseY >= buttonY &&
-                    mouseY <= buttonY + buttonHeight;
-
-                const buttonColor = isHovered
-                    ? this.colors.createButtonHover
-                    : this.colors.createButton;
-                const buttonText = `§f+ Create "${filterText}"`;
-
-                Renderer.drawRect(
-                    buttonColor,
-                    buttonX,
-                    buttonY,
-                    buttonWidth,
-                    buttonHeight
-                );
-                Renderer.drawRect(0xff000000, buttonX, buttonY, buttonWidth, 1);
-                Renderer.drawRect(
-                    0xff000000,
-                    buttonX,
-                    buttonY + buttonHeight - 1,
-                    buttonWidth,
-                    1
-                );
-                Renderer.drawRect(
-                    0xff000000,
-                    buttonX,
-                    buttonY,
-                    1,
-                    buttonHeight
-                );
-                Renderer.drawRect(
-                    0xff000000,
-                    buttonX + buttonWidth - 1,
-                    buttonY,
-                    1,
-                    buttonHeight
-                );
-
-                const textWidth = Renderer.getStringWidth(buttonText);
-                const textX = buttonX + (buttonWidth - textWidth) / 2;
-                const textY = buttonY + (buttonHeight - 8) / 2;
-                Renderer.drawStringWithShadow(buttonText, textX, textY);
-
-                this.ui.createButton = {
-                    x: buttonX,
-                    y: buttonY,
-                    width: buttonWidth,
-                    height: buttonHeight,
-                    itemName: filterText,
-                    isDisabled: false,
-                };
-            } else {
-                this.ui.createButton = null;
-            }
-
+            this.ui.createButton =
+                filterText.length > 0
+                    ? { x: 0, y: 0, width: 0, height: 0, itemName: filterText }
+                    : null;
             return;
         }
-
-        this.ui.createButton = null;
 
         const startIndex = this.state.scrollOffset;
         const endIndex = Math.min(
@@ -1928,12 +1981,14 @@ class BaseInventoryCache {
                           (scrollbarHeight - thumbHeight)
                     : listStartY;
 
+            const isHovered =
+                mouseX >= scrollbarX &&
+                mouseX <= scrollbarX + scrollbarWidth &&
+                mouseY >= thumbY &&
+                mouseY <= thumbY + thumbHeight;
+
             const thumbColor =
-                this.state.scrollbarDragging ||
-                (mouseX >= scrollbarX &&
-                    mouseX <= scrollbarX + scrollbarWidth &&
-                    mouseY >= thumbY &&
-                    mouseY <= thumbY + thumbHeight)
+                this.state.scrollbarDragging || isHovered
                     ? this.colors.scrollbarThumbHover
                     : this.colors.scrollbarThumb;
 
@@ -1945,12 +2000,25 @@ class BaseInventoryCache {
                 thumbHeight
             );
 
-            // store drag start position for scrolling logic
-            this.state.scrollbarDragStartY = mouseY;
-            this.state.scrollbarDragStartOffset = this.state.scrollOffset;
+            // store drag start position for scrolling
+            if (!this.state.scrollbarDragStartY)
+                this.state.scrollbarDragStartY = 0;
+            if (!this.state.scrollbarDragStartOffset)
+                this.state.scrollbarDragStartOffset = this.state.scrollOffset;
+
+            this.state.scrollbarThumb = {
+                x: scrollbarX,
+                y: thumbY,
+                width: scrollbarWidth,
+                height: thumbHeight,
+                maxScrollRange,
+                listStartY,
+                scrollbarHeight,
+                listItems,
+                maxVisibleItems,
+            };
         }
 
-        // Draw list items including the last "create" item
         for (let i = startIndex; i < endIndex; i++) {
             const item = listItems[i];
             if (!item) continue;
@@ -1967,11 +2035,9 @@ class BaseInventoryCache {
 
             if (isHovered) this.state.hoveredIndex = i;
 
-            // Updated background colors to match regions style
-            let bgColor = 0xff333333; // Changed from this.colors.itemBg to lighter background
-            if (i === this.state.selectedIndex)
-                bgColor = 0xff4caf50; // Keep selected green
-            else if (isHovered) bgColor = 0xff555555; // Changed from this.colors.itemHover to lighter hover
+            let bgColor = 0xff333333;
+            if (i === this.state.selectedIndex) bgColor = 0xff4caf50;
+            else if (isHovered) bgColor = 0xff555555;
             if (item.isPlaceholder) bgColor = 0xff4a4a00;
             if (item.isCreateItem) {
                 bgColor = isHovered
@@ -2000,7 +2066,6 @@ class BaseInventoryCache {
                     itemY + (itemHeight - 8) / 2
                 );
             } else {
-                // Call the specialized item rendering method that subclasses can override
                 this.renderListItem(
                     item,
                     itemX,
@@ -2046,4 +2111,3 @@ class BaseInventoryCache {
 }
 
 export { BaseInventoryCache, Input, Dropdown };
-barDragging = true;

@@ -33,6 +33,7 @@ class CommandsCache extends BaseInventoryCache {
                 create: "command create",
                 edit: "command edit",
                 delete: "command delete",
+                actions: "command actions",
                 list: "commands",
             },
             chatPatterns: {
@@ -219,14 +220,13 @@ class CommandsCache extends BaseInventoryCache {
         }
     }
 
-    // Override executeAction to handle actions option
     executeAction(action, item) {
         switch (action) {
             case "edit":
                 ChatLib.command(`${this.config.commands.edit} ${item.name}`);
                 break;
             case "actions":
-                ChatLib.command(`command actions ${item.name}`);
+                ChatLib.command(`${this.config.commands.actions} ${item.name}`);
                 break;
             case "delete":
                 ChatLib.command(`${this.config.commands.delete} ${item.name}`);
