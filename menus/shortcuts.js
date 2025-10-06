@@ -3,6 +3,18 @@
 import { PREFIX } from "../utils/constants";
 import { playFailSound } from "../utils/constants";
 
+var GLOBAL =
+    typeof globalThis !== "undefined"
+        ? globalThis
+        : typeof global !== "undefined"
+        ? global
+        : typeof window !== "undefined"
+        ? window
+        : typeof self !== "undefined"
+        ? self
+        : this;
+var globalThis = GLOBAL;
+
 // Java type imports
 if (typeof Keyboard === "undefined") {
     var Keyboard = Java.type("org.lwjgl.input.Keyboard");
@@ -43,6 +55,14 @@ class GridMenu {
             textNormal: "§f", // White text (Minecraft color code)
             textHover: "§e", // Yellow text on hover
             textSelected: "§a", // Green text when selected
+        };
+
+        this.toggle = {
+            width: 50,
+            height: 22,
+            x: 0,
+            y: 0,
+            hovered: false,
         };
     }
 
@@ -282,6 +302,76 @@ class GridMenu {
                 menuX + (menuWidth - Renderer.getStringWidth(cautionText)) / 2;
             const cautionY = menuY + menuHeight + 30;
             Renderer.drawStringWithShadow(cautionText, cautionX, cautionY);
+
+            const toggleX = menuX + menuWidth - this.toggle.width - 12;
+            const toggleY = menuY + menuHeight - this.toggle.height - 12;
+            this.toggle.x = toggleX;
+            this.toggle.y = toggleY;
+
+            // Check hover for toggle
+            this.toggle.hovered =
+                mouseX >= toggleX &&
+                mouseX <= toggleX + this.toggle.width &&
+                mouseY >= toggleY &&
+                mouseY <= toggleY + this.toggle.height;
+
+            // Toggle background
+            Renderer.drawRect(
+                0xff111111,
+                toggleX - 2,
+                toggleY - 2,
+                this.toggle.width + 4,
+                this.toggle.height + 4
+            );
+            Renderer.drawRect(
+                0xff212121,
+                toggleX,
+                toggleY,
+                this.toggle.width,
+                this.toggle.height
+            );
+
+            // Read current RPC state
+            const rpcEnabled =
+                typeof globalThis.discordRPCControl !== "undefined" &&
+                typeof globalThis.discordRPCControl.isEnabled === "function"
+                    ? globalThis.discordRPCControl.isEnabled()
+                    : true;
+
+            // Short label
+            const label = rpcEnabled ? "RPC" : "RPC";
+            const labelColor = rpcEnabled ? "§a" : "§c";
+            Renderer.drawStringWithShadow(
+                labelColor + label,
+                toggleX + 8,
+                toggleY + 8
+            );
+
+            const indicatorSize = 10;
+            const indicatorX = toggleX + this.toggle.width - 18;
+            const indicatorY =
+                toggleY + (this.toggle.height - indicatorSize) / 2;
+            const indicatorColor = rpcEnabled ? 0xff2e7d32 : 0xffe74c3c;
+            Renderer.drawRect(
+                indicatorColor,
+                indicatorX,
+                indicatorY,
+                indicatorSize,
+                indicatorSize
+            );
+
+            // Hover tooltip for toggle
+            if (this.toggle.hovered) {
+                this.drawTooltip(
+                    rpcEnabled
+                        ? "Click to disable TQoL Discord RPC"
+                        : "Click to enable TQoL Discord RPC",
+                    mouseX,
+                    mouseY,
+                    screenWidth,
+                    screenHeight
+                );
+            }
         });
 
         gui.registerClicked((mouseX, mouseY, button) => {
@@ -313,11 +403,36 @@ class GridMenu {
             const menuY = (screenHeight - menuHeight) / 2;
 
             // Check if click is inside menu area
-            const insideMenu =
+            let insideMenu =
                 mouseX >= menuX &&
                 mouseX <= menuX + menuWidth &&
                 mouseY >= menuY &&
                 mouseY <= menuY + menuHeight;
+
+            // Check if click is inside toggle area
+            const toggleClicked =
+                mouseX >= this.toggle.x &&
+                mouseX <= this.toggle.x + this.toggle.width &&
+                mouseY >= this.toggle.y &&
+                mouseY <= this.toggle.y + this.toggle.height;
+
+            if (toggleClicked) {
+                // Toggle RPC setting
+                if (typeof globalThis.discordRPCControl === "undefined") {
+                    ChatLib.chat(PREFIX + "§cDiscord RPC control unavailable.");
+                    World.playSound("note.bass", 0.7, 0.6);
+                } else {
+                    try {
+                        globalThis.discordRPCControl.toggle();
+                        World.playSound("random.click", 0.7, 1.0);
+                    } catch (e) {
+                        ChatLib.chat(
+                            PREFIX + "§cFailed to toggle Discord RPC: " + e
+                        );
+                        World.playSound("note.bass", 0.7, 0.6);
+                    }
+                }
+            }
 
             let clickedAny = false;
             this.buttons.forEach((btn, index) => {
@@ -333,8 +448,8 @@ class GridMenu {
                 }
             });
 
-            // Only close if click is OUTSIDE the menu area
-            if (!insideMenu) this.close();
+            // Only close if click is OUTSIDE the menu
+            if (!insideMenu && !toggleClicked) this.close();
         });
 
         gui.registerKeyTyped((char, keyCode) => {
@@ -544,6 +659,12 @@ register("guiOpened", (guiEvent) => {
 const gridMenu = new GridMenu();
 
 function showMainMenu() {
+    const rpcEnabled =
+        typeof globalThis.discordRPCControl !== "undefined" &&
+        globalThis.discordRPCControl.isEnabled()
+            ? globalThis.discordRPCControl.isEnabled()
+            : true;
+
     gridMenu
         .clearButtons()
         .setTitle(PREFIX + "Shortcut Menu")

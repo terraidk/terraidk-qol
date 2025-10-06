@@ -1,10 +1,25 @@
 /// <reference types="../CTAutocomplete" />
 
+import { PREFIX } from "../utils/constants";
+
 const CLIENT_ID = "1413900772852236399";
 let isRPCInitialized = false;
 let currentServer = "Unknown";
 let startTime = Date.now();
 let isInGame = false;
+
+var GLOBAL =
+    typeof globalThis !== "undefined"
+        ? globalThis
+        : typeof global !== "undefined"
+        ? global
+        : typeof window !== "undefined"
+        ? window
+        : typeof self !== "undefined"
+        ? self
+        : this;
+
+var globalThis = GLOBAL;
 
 const File = Java.type("java.io.File");
 const URLClassLoader = Java.type("java.net.URLClassLoader");
@@ -16,6 +31,59 @@ if (typeof Thread === "undefined") {
 
 let rpcLibrary = null;
 let updateTimeout = null;
+
+let discordRPCEnabled = true;
+const CONFIG_FILE =
+    "config/ChatTriggers/modules/terraidk-qol/discordRPC/config.json";
+
+function loadRPCSetting() {
+    try {
+        if (FileLib.exists(CONFIG_FILE)) {
+            const cfg = JSON.parse(FileLib.read(CONFIG_FILE));
+            discordRPCEnabled = !!cfg.enabled;
+        } else {
+            saveRPCSetting();
+        }
+    } catch (e) {
+        discordRPCEnabled = true;
+        saveRPCSetting();
+    }
+}
+
+function saveRPCSetting() {
+    try {
+        FileLib.write(
+            CONFIG_FILE,
+            JSON.stringify({ enabled: !!discordRPCEnabled })
+        );
+    } catch (e) {}
+}
+
+function setDiscordRPCEnabled(enabled) {
+    enabled = !!enabled;
+    if (discordRPCEnabled === enabled) return;
+    discordRPCEnabled = enabled;
+    saveRPCSetting();
+    if (discordRPCEnabled) {
+        initializeRPC();
+        ChatLib.chat(PREFIX + "&aTQoL Discord RPC enabled");
+    } else {
+        shutdownRPC();
+        ChatLib.chat(PREFIX + "&cTQoL Discord RPC disabled");
+    }
+}
+
+function toggleDiscordRPC() {
+    setDiscordRPCEnabled(!discordRPCEnabled);
+}
+
+if (typeof GLOBAL.discordRPCControl === "undefined") {
+    GLOBAL.discordRPCControl = {
+        isEnabled: () => discordRPCEnabled,
+        set: setDiscordRPCEnabled,
+        toggle: toggleDiscordRPC,
+    };
+}
 
 function getModuleFolder() {
     const modulesDir = new File("config/ChatTriggers/modules/");
@@ -60,34 +128,24 @@ function getLocalVersion() {
 }
 
 function loadDiscordRPCLibrary() {
-    if (rpcLibrary) {
-        return true;
-    }
+    if (rpcLibrary) return true;
 
     try {
         const modulePath =
             "config/ChatTriggers/modules/terraidk-qol/discordRPC";
         const jarFile = new File(modulePath + "/discord-rpc.jar");
-
-        if (!jarFile.exists()) {
-            return false;
-        }
-
-        const dll32 = new File(modulePath, "discord-rpc-x86.dll");
-        const dll64 = new File(modulePath, "discord-rpc-x64.dll");
-
-        if (!dll32.exists() && !dll64.exists()) {
-            return false;
-        }
+        if (!jarFile.exists()) return false;
 
         const is64Bit = System.getProperty("sun.arch.data.model").equals("64");
-        const sourceDll = is64Bit ? dll64 : dll32;
+        const sourceDll = is64Bit
+            ? "discord-rpc-x64.dll"
+            : "discord-rpc-x86.dll";
         const targetDll = new File(modulePath, "discord-rpc.dll");
 
         if (!targetDll.exists()) {
             try {
                 java.nio.file.Files.copy(
-                    sourceDll.toPath(),
+                    new File(modulePath, sourceDll).toPath(),
                     targetDll.toPath(),
                     java.nio.file.StandardCopyOption.REPLACE_EXISTING
                 );
@@ -96,43 +154,35 @@ function loadDiscordRPCLibrary() {
             }
         }
 
-        const jarURL = jarFile.toURI().toURL();
-        const urls = [jarURL];
+        try {
+            System.load(targetDll.getAbsolutePath());
+        } catch (e) {}
 
+        const jarURL = jarFile.toURI().toURL();
         const classLoader = new URLClassLoader(
-            urls,
+            [jarURL],
             Thread.currentThread().getContextClassLoader()
         );
+        Thread.currentThread().setContextClassLoader(classLoader);
 
-        try {
-            const DiscordEventHandlers = Java.type(
-                "net.arikia.dev.drpc.DiscordEventHandlers"
-            );
-            const DiscordRichPresence = Java.type(
-                "net.arikia.dev.drpc.DiscordRichPresence"
-            );
-            const DiscordRPC = Java.type("net.arikia.dev.drpc.DiscordRPC");
+        const DiscordEventHandlers = Java.type(
+            "net.arikia.dev.drpc.DiscordEventHandlers"
+        );
+        const DiscordRichPresence = Java.type(
+            "net.arikia.dev.drpc.DiscordRichPresence"
+        );
+        const DiscordRPC = Java.type("net.arikia.dev.drpc.DiscordRPC");
 
-            const libraryPath = new File(
-                jarFile.getParent(),
-                "discord-rpc.dll"
-            );
-            if (!libraryPath.exists()) {
-                throw new Error("discord-rpc.dll not found in module folder!");
-            }
+        rpcLibrary = {
+            DiscordRPC,
+            DiscordRichPresence,
+            DiscordEventHandlers,
+            classLoader,
+        };
 
-            rpcLibrary = {
-                DiscordRPC,
-                DiscordRichPresence,
-                DiscordEventHandlers,
-                classLoader,
-            };
-
-            return true;
-        } catch (e) {
-            return false;
-        }
+        return true;
     } catch (e) {
+        console.log("Failed to load Discord RPC library:", e);
         return false;
     }
 }
@@ -262,9 +312,16 @@ function shutdownRPC() {
 
 register("worldLoad", () => {
     isInGame = true;
+    startTime = Date.now();
     const serverIP = Server.getIP();
     currentServer = serverIP ? serverIP.replace(/:\d+$/, "") : "Singleplayer";
-    debouncedUpdatePresence();
+    if (discordRPCEnabled) {
+        if (!isRPCInitialized) {
+            initializeRPC();
+        } else {
+            debouncedUpdatePresence();
+        }
+    }
 });
 
 register("worldUnload", () => {
@@ -273,13 +330,22 @@ register("worldUnload", () => {
     debouncedUpdatePresence();
 });
 
-register("gameUnload", () => shutdownRPC());
+register("gameUnload", () => {
+    if (updateTimeout) {
+        clearTimeout(updateTimeout);
+        updateTimeout = null;
+    }
+    shutdownRPC();
+});
 
 register("step", () => {
     if (isRPCInitialized && rpcLibrary) {
         debouncedUpdatePresence();
+    } else if (discordRPCEnabled && !isRPCInitialized) {
+        initializeRPC();
     }
-}).setFps(0.1);
+}).setFps(2);
 (() => {
-    initializeRPC();
+    loadRPCSetting();
+    if (discordRPCEnabled) initializeRPC();
 })();
