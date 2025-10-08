@@ -1,99 +1,86 @@
-# terraidk-qol
+# terraidk's QoL
 
-**terraidk-qol** is a Quality of Life (QoL) ChatTriggers module for Housing.
-It adds streamlined menus, shortcuts, and other small improvements to make gameplay and coding smoother & faster.
+## Installation
 
----
+1. **Requirements**
+   - Minecraft 1.8.9
+   - ChatTriggers 2.2.0
 
-## 📥 Installation
+2. **Install ChatTriggers**
+   - Download [ChatTriggers 2.2.0](https://github.com/ChatTriggers/ChatTriggers/releases/tag/2.2.0)
+   - Place `ChatTriggers-2.2.0.jar` in your `.minecraft/mods/` folder
+   - Launch Minecraft once
 
-### 1. Install ChatTriggers  
-This module **requires ChatTriggers**. If you don’t already have it, download and install it first:  
-[ChatTriggers on Modrinth](https://modrinth.com/mod/chattriggers/version/2.2.0)
+3. **Install terraidk-qol**
+   ```bash
+   1. Download latest release from GitHub
+   2. Extract the zip file
+   3. Move 'terraidk-qol' folder to:
+      .minecraft/config/ChatTriggers/modules/
+   4. Run /ct reload in-game
+   ```
 
-Place the `ChatTriggers-x.x.x.jar` into your Minecraft `mods/` folder and launch the game once.
+4. **Initial Setup**
+   - Open Minecraft Controls menu
+   - Find "terraidk's QoL" section
+   - Set up recommended keybinds:
+     - `Shortcut Menu` - Main grid interface
+     - `Go To Last` - Quick return to recent items
 
-### 2. Install terraidk-qol
-1. Download the latest release [here](https://github.com/terraidk/terraidk-qol/releases).  
-2. After extracting, move the `terraidk-qol` folder into your ChatTriggers modules folder. (`.minecraft/config/ChatTriggers/modules/`) 
-3. Run the following in-game command: `/ct reload`
+## Features
 
----
+### Interactive Menu System
+- Grid-style interface for Housing features
+- Quick return to recent items
+- Keyboard/mouse navigation
+- Customizable hotkeys
 
-## 🕹️ In-Game Usage & Commands
+### Command Shortcuts
+- **Functions**
+  - `/func <create|run|edit|delete> <name>`
+  - Short: `/fc`, `/fr`, `/fe`, `/fd`
+- **Regions**
+  - `/region <create|edit|delete> <name>`
+  - Short: `/rc`, `/re`, `/rd`
+- **Commands**
+  - `/command <create|edit|actions|delete> <name>`
+  - Short: `/cc`, `/ce`, `/ca`, `/cd`
+- **Menus**
+  - `/menu <create|edit|display|delete> <name>`
+  - Short: `/mc`, `/me`, `/md`, `/mdel`
 
-### Opening the Shortcut Menu
+### Utility Commands
+- **Party Management**
+  - `/pt <player>` - Transfer party
+  - `/pd` - Disband party
+  - `/pw` - Party warp
+- **Navigation**
+  - `/lh` - Lobby housing
+  - `/pcp` - Parkour checkpoint
+- **Variables**
+  - `/var <global|playername> <list|inc|dec|set|unset> <var> [value]`
+  - `/selfvar <list|inc|dec|set|unset> <var> [value]`
+- **Reminders**
+  - `/remind <1h 20m | HH:MM[am/pm]> <message>`
+  - `/reminders` - Manage reminders
 
-- **Assign a keybind** for `Shortcut Menu` in Minecraft Controls (under "terraidk's QoL").
-- Press your keybind in-game to open a grid-style menu with all major Housing commands.
-- **Navigate** with your mouse or arrow keys, and press Enter or click to select.
-- **Tooltips**: Hover over any button for a description of its function.
-- **"Go To Last"**: Use the "Go To Last" button in the menu, or assign a keybind for `Go To Last Shortcut Menu` to instantly access your most recently used Function, Command, Region, or Menu.
+### Enhanced Features
+- Quick search filters
+- Visual feedback
+- Toggleable Discord Rich Presence
 
----
+### Configuration
+- `/tqol config` - Toggle features
+- `/tqol help [filter]` - Command help
+- Saved preferences
 
-### Command Reference
-
-#### Function Commands
-- `/func <create|run|edit|delete> <name>`  
-  - Example: `/func create myFunction`
-- Shortcuts:
-  - `/fc <name>` - Create function
-  - `/fr <name>` - Run function
-  - `/fe <name>` - Edit function
-  - `/fd <name>` - Delete function
-
-#### Region Commands
-- `/region <create|edit|delete> <name>`
-- Shortcuts:
-  - `/rc <name>` - Create region
-  - `/re <name>` - Edit region
-  - `/rd <name>` - Delete region
-
-#### Command Commands
-- `/command <create|edit|actions|delete> <name>`
-- Shortcuts:
-  - `/cc <name>` - Create command
-  - `/ce <name>` - Edit command
-  - `/ca <name>` - View command actions
-  - `/cd <name>` - Delete command
-
-#### Menu Commands
-- `/menu <create|edit|display|delete> <name>`
-- Shortcuts:
-  - `/mc <name>` - Create menu
-  - `/me <name>` - Edit menu
-  - `/md <name>` - Display menu
-  - `/mdel <name>` - Delete menu
-
-#### Party & Utility Commands
-- `/pt <player>` - Transfer party to player
-- `/pd` - Disband party
-- `/lh` - Go to housing lobby
-- `/pcp` - Go to parkour checkpoint
-- `/pw` - Party warp
-
-#### Variable Commands
-- `/var <global|playername> <list|inc|dec|set|unset> <var> [value]`
-- `/selfvar <list|inc|dec|set|unset> <var> [value]`
-
-#### Reminders
-- `/remind <1h 20m | HH:MM[am/pm]> <message>` - Set a reminder (very flexible with input)
-- `/reminders` - View, edit, or delete reminders
-
-#### Help
-- `/tqol` - Show command list and help (with paging/filtering)
-
----
-
-### Tips
-
-- **Failsafe Handling:**  
-  If you forget required arguments, the mod will show usage instructions in chat.
-- **Quick Navigation:**  
-  Use your configured keybinds for instant access to menus and your last used items.
-- **Update Notifications:**  
-  The mod checks for updates on startup and notifies you if a new version is available.
+## Usage Tips
+- Use TAB completion
+- ESC/right-click closes menus
+- Hover for tooltips
+- Type to filter lists
+- Arrow keys for navigation
+- `/tqol <vanilla command>` - Run default command
 
 ---
 

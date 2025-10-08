@@ -142,19 +142,13 @@ class Dropdown {
         } catch (e) {}
 
         // Draw header with full name (no truncation)
-        const headerText = `§7${this.item.name}`; // Gray color for semi-transparent look
+        const headerText = `§7${this.item.name}`;
         const headerWidth = Renderer.getStringWidth(headerText);
         const headerHeight = 12;
         const headerY = y - headerHeight - 4;
 
-        // Only draw header if it fits within reasonable bounds and has content
         if (headerWidth > 0 && headerY > 10) {
-            // No background rectangle - transparent background as requested
-
-            // Center the text above the dropdown, but allow it to extend beyond dropdown width
             const headerTextX = x + (width - headerWidth) / 2;
-
-            // Draw the full name without truncation
             Renderer.drawStringWithShadow(headerText, headerTextX, headerY + 2);
         }
 
@@ -350,6 +344,10 @@ class BaseInventoryCache {
             scrollbarDragging: false,
             scrollbarDragStartY: 0,
             scrollbarDragStartOffset: 0,
+            totalItems: 0,
+            isReadingLimits: false,
+            limitsBuffer: [],
+            isFirstLoad: true,
         };
 
         // UI Components
@@ -567,6 +565,72 @@ class BaseInventoryCache {
                 }
             }
         });
+
+        // Listen for limits response messages (multi-line handling)
+        register("chat", (event) => {
+            const message = ChatLib.getChatMessage(event, true);
+
+            // Start collecting when we see the header
+            if (message.includes("Your Housing Limits:")) {
+                this.state.isReadingLimits = true;
+                this.state.limitsBuffer = [message];
+                cancel(event); // Hide from chat
+                return;
+            }
+
+            // Continue collecting subsequent lines
+            if (this.state.isReadingLimits) {
+                this.state.limitsBuffer.push(message);
+                cancel(event); // Hide from chat
+
+                // After collecting enough lines (adjust count if needed)
+                if (this.state.limitsBuffer.length >= 17) {
+                    this.state.isReadingLimits = false;
+
+                    this.parseLimitsBuffer();
+                }
+            }
+        });
+    }
+
+    parseLimitsBuffer() {
+        const lines = this.state.limitsBuffer;
+        let targetLine = "";
+
+        // Find the relevant line based on title
+        switch (this.config.title.toLowerCase()) {
+            case "functions":
+                targetLine = lines.find((l) => l.includes("Functions:"));
+                break;
+            case "custom menus":
+                targetLine = lines.find((l) => l.includes("Custom Menus:"));
+                break;
+            case "regions":
+                targetLine = lines.find((l) => l.includes("Regions:"));
+                break;
+            case "commands":
+                targetLine = lines.find((l) => l.includes("Custom Commands:"));
+                break;
+        }
+
+        if (targetLine) {
+            const matchWithCodes = targetLine.match(
+                /(\d+)(?:§.)*\s*\/\s*(?:§.)*(\d+)/
+            );
+            if (matchWithCodes) {
+                this.state.totalItems = parseInt(matchWithCodes[2]); // Second number = max limit
+                this.updateFilteredItems();
+            } else {
+                // Fallback: just grab the first two numbers we find
+                const allNumbers = targetLine.match(/\d+/g);
+                if (allNumbers && allNumbers.length >= 2) {
+                    this.state.totalItems = parseInt(allNumbers[1]);
+                    this.updateFilteredItems();
+                }
+            }
+        }
+
+        this.state.limitsBuffer = [];
     }
 
     // Utility Methods
@@ -674,8 +738,34 @@ class BaseInventoryCache {
         const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
 
         if (this.config.inventoryPattern.test(cleanTitle)) {
-            this.detectPageInfo(cleanTitle, inventory);
-            this.startScanning();
+            // Send silent packet on first open
+            try {
+                const C01PacketChatMessage = Java.type(
+                    "net.minecraft.network.play.client.C01PacketChatMessage"
+                );
+                Client.sendPacket(new C01PacketChatMessage("/limits"));
+            } catch (e) {
+                ChatLib.command("limits", true);
+            }
+
+            // Start normal GUI initialization after a small delay
+            setTimeout(() => {
+                this.detectPageInfo(cleanTitle, inventory);
+                this.startScanning();
+            }, 50);
+        }
+    }
+
+    requestLimits() {
+        try {
+            // Use actual chat command packet instead of tab complete
+            const C01PacketChatMessage = Java.type(
+                "net.minecraft.network.play.client.C01PacketChatMessage"
+            );
+            Client.sendPacket(new C01PacketChatMessage("/limits"));
+        } catch (e) {
+            // Fallback to regular command if packet fails
+            ChatLib.command("limits", true);
         }
     }
 
@@ -881,6 +971,268 @@ class BaseInventoryCache {
             0,
             Math.min(this.state.scrollOffset, maxScroll)
         );
+    }
+
+    getScannedPagesDisplay() {
+        const cached = this.state.cachedItems.length;
+        const total = this.state.totalItems > 0 ? this.state.totalItems : "?";
+
+        // Page info
+        let pageInfo = "";
+        if (this.state.totalPages > 0 && this.state.totalPages !== 999) {
+            pageInfo = ` [${this.state.scannedPages.size}/${this.state.totalPages}]`;
+        } else if (this.state.scannedPages.size > 0) {
+            pageInfo = ` [${this.state.scannedPages.size}/?]`;
+        }
+
+        return `(${cached}/${total})${pageInfo}`;
+    }
+
+    // Scanning Methods
+    startScanning() {
+        this.state.isScanning = true;
+        this.scanCurrentPage();
+    }
+
+    scanCurrentPage() {
+        const inventory = Player.getOpenedInventory();
+        if (!inventory) {
+            this.state.isScanning = false;
+            return;
+        }
+
+        this.state.scannedPages.add(this.state.currentPage);
+
+        const currentPageItems = new Set();
+        let newItemsFound = 0;
+        let updatedPlaceholders = 0;
+        let renamedItems = 0;
+
+        this.config.slotIndices.forEach((slotIndex) => {
+            const item = inventory.getStackInSlot(slotIndex);
+            if (item && item.getName() !== "Air") {
+                const itemData = this.parseItem(item, slotIndex);
+                if (itemData) {
+                    currentPageItems.add(itemData.name);
+
+                    const existingItem = this.state.cachedItems.find(
+                        (r) => r.name === itemData.name
+                    );
+
+                    if (!existingItem) {
+                        const possibleRename = this.state.cachedItems.find(
+                            (r) =>
+                                r.page === this.state.currentPage &&
+                                r.slotIndex === slotIndex &&
+                                r.name !== itemData.name
+                        );
+
+                        if (possibleRename) {
+                            if (renamedItems < 2) {
+                                ChatLib.chat(
+                                    PREFIX +
+                                        `§6Detected rename: "${possibleRename.name}" → "${itemData.name}"`
+                                );
+                            }
+
+                            Object.assign(possibleRename, itemData);
+                            renamedItems++;
+                        } else {
+                            this.state.cachedItems.push(itemData);
+                            newItemsFound++;
+                        }
+                    } else if (existingItem.isPlaceholder) {
+                        Object.assign(existingItem, itemData);
+                        existingItem.isPlaceholder = false;
+                        updatedPlaceholders++;
+                    } else {
+                        Object.assign(existingItem, itemData);
+                    }
+                }
+            }
+        });
+
+        // Check for deleted items
+        const deletedItems = this.state.cachedItems.filter(
+            (r) =>
+                r.page === this.state.currentPage &&
+                !r.isPlaceholder &&
+                !currentPageItems.has(r.name)
+        );
+
+        if (deletedItems.length > 0) {
+            deletedItems.forEach((item) => {
+                if (deletedItems.length <= 2) {
+                    ChatLib.chat(
+                        PREFIX + `§cDeleted item detected: "${item.name}"`
+                    );
+                }
+                const index = this.state.cachedItems.indexOf(item);
+                if (index > -1) {
+                    this.state.cachedItems.splice(index, 1);
+                }
+            });
+        }
+
+        // Log results for auto-scanning
+        if (this.state.isAutoScanning) {
+            let message = `§bPage ${this.state.currentPage}:`;
+            if (newItemsFound > 0) message += ` +${newItemsFound} new`;
+            if (updatedPlaceholders > 0)
+                message += ` ~${updatedPlaceholders} updated`;
+
+            if (renamedItems > 0 && renamedItems <= 2)
+                message += ` ↻${renamedItems} renamed`;
+
+            if (deletedItems.length > 0 && deletedItems.length <= 2)
+                message += ` -${deletedItems.length} deleted`;
+
+            message += ` (Total: ${this.state.cachedItems.length})`;
+
+            if (
+                newItemsFound > 0 ||
+                updatedPlaceholders > 0 ||
+                (renamedItems > 0 && renamedItems <= 2) ||
+                (deletedItems.length > 0 && deletedItems.length <= 2)
+            ) {
+                ChatLib.chat(PREFIX + message);
+                World.playSound("random.orb", 1, 2);
+            }
+        } else {
+            let message = `§aPage ${this.state.currentPage} scan complete.`;
+            if (newItemsFound > 0)
+                message += ` Found ${newItemsFound} new items.`;
+            if (updatedPlaceholders > 0)
+                message += ` Updated ${updatedPlaceholders} placeholders.`;
+
+            if (renamedItems > 0 && renamedItems <= 2)
+                message += ` Detected ${renamedItems} renames.`;
+
+            if (deletedItems.length > 0 && deletedItems.length <= 2)
+                message += ` Removed ${deletedItems.length} deleted items.`;
+
+            message += ` Total: ${this.state.cachedItems.length}`;
+
+            if (
+                newItemsFound > 0 ||
+                updatedPlaceholders > 0 ||
+                (renamedItems > 0 && renamedItems <= 2) ||
+                (deletedItems.length > 0 && deletedItems.length <= 2)
+            ) {
+                ChatLib.chat(PREFIX + message);
+            }
+        }
+
+        this.updateFilteredItems();
+
+        if (!this.state.isActive) {
+            this.state.isActive = true;
+            this.ui.initializeTextField = true;
+            this.disableAllKeybinds();
+        }
+
+        this.state.isScanning = false;
+
+        if (
+            this.state.scannedPages.size < this.state.totalPages &&
+            !this.state.isAutoScanning
+        ) {
+            const unscannedPages = [];
+            for (let i = 1; i <= this.state.totalPages; i++) {
+                if (!this.state.scannedPages.has(i)) {
+                    unscannedPages.push(i);
+                }
+            }
+        }
+    }
+
+    startAutoScan() {
+        if (this.state.isAutoScanning || !this.state.isActive) return;
+
+        this.state.isAutoScanning = true;
+
+        const inventory = Player.getOpenedInventory();
+        const previousPageItem = inventory.getStackInSlot(45);
+
+        if (previousPageItem && previousPageItem.getName() !== "Air") {
+            inventory.click(45, false, "RIGHT");
+        }
+
+        ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
+        this.state.autoScanTimeout = setTimeout(
+            () => this.continueAutoScan(),
+            100
+        );
+    }
+
+    stopAutoScan() {
+        if (!this.state.isAutoScanning) return;
+
+        this.state.isAutoScanning = false;
+        if (this.state.autoScanTimeout) {
+            clearTimeout(this.state.autoScanTimeout);
+            this.state.autoScanTimeout = null;
+        }
+
+        ChatLib.chat(
+            PREFIX +
+                `§eAuto-scan stopped. Scanned ${this.state.scannedPages.size}/${this.state.totalPages} pages.`
+        );
+    }
+
+    continueAutoScan() {
+        if (!this.state.isAutoScanning) return;
+
+        const inventory = Player.getOpenedInventory();
+        if (!inventory) {
+            this.state.autoScanTimeout = setTimeout(
+                () => this.continueAutoScan(),
+                200
+            );
+            return;
+        }
+
+        if (!this.state.scannedPages.has(this.state.currentPage)) {
+            this.scanCurrentPage();
+        }
+
+        const nextPageItem = inventory.getStackInSlot(53);
+
+        if (nextPageItem && nextPageItem.getName() !== "Air") {
+            inventory.click(53, false, "LEFT");
+            this.state.autoScanTimeout = setTimeout(
+                () => this.continueAutoScan(),
+                500
+            );
+            return;
+        }
+
+        ChatLib.chat(
+            PREFIX +
+                `§aAuto-scan complete! Scanned all ${this.state.totalPages} pages with ${this.state.cachedItems.length} total items.`
+        );
+        this.state.isAutoScanning = false;
+        this.refreshPlaceholderItems();
+    }
+
+    refreshPlaceholderItems() {
+        const placeholders = this.state.cachedItems.filter(
+            (r) => r.isPlaceholder
+        );
+        if (placeholders.length > 0) {
+            ChatLib.chat(
+                PREFIX +
+                    `§e${placeholders.length} placeholder item(s) detected. Consider rescanning to get full data.`
+            );
+        }
+    }
+
+    areAllPagesScanned() {
+        if (this.state.scannedPages.size === 0) return false;
+        if (this.state.totalPages === 0 || this.state.totalPages === 999) {
+            return false;
+        }
+        return this.state.scannedPages.size >= this.state.totalPages;
     }
 
     // Event Handlers
@@ -1169,28 +1521,6 @@ class BaseInventoryCache {
         return false;
     }
 
-    handleMouseDrag(mouseX, mouseY) {
-        if (this.state.scrollbarDragging && this.state.scrollbarThumb) {
-            const { y, height, listItems, maxVisibleItems } =
-                this.state.scrollbarThumb;
-            const deltaY = mouseY - this.state.scrollbarDragStartY;
-            const totalScrollable = listItems.length - maxVisibleItems;
-
-            if (totalScrollable > 0) {
-                const scrollRatio =
-                    deltaY / (height - this.state.scrollbarThumb.height);
-                this.state.scrollOffset = Math.max(
-                    0,
-                    Math.min(
-                        this.state.scrollbarDragStartOffset +
-                            Math.round(scrollRatio * totalScrollable),
-                        totalScrollable
-                    )
-                );
-            }
-        }
-    }
-
     createItem(itemName) {
         if (itemName && itemName.trim().length > 0) {
             let cleanName = itemName;
@@ -1363,291 +1693,6 @@ class BaseInventoryCache {
         );
     }
 
-    // State Management
-    clearCache() {
-        this.state.cachedItems = [];
-        this.state.filteredItems = [];
-        this.state.isActive = false;
-        this.state.hoveredIndex = -1;
-        this.state.selectedIndex = -1;
-        this.state.scrollOffset = 0;
-        this.state.isScanning = false;
-        this.state.persistentFilterText = "";
-        this.state.scannedPages.clear();
-        this.state.totalPages = 0;
-        this.state.currentPage = 1;
-        this.state.scrollbarDragging = false;
-        this.ui.filterTextField = null;
-        this.ui.initializeTextField = true;
-
-        this.state.isAutoScanning = false;
-        if (this.state.autoScanTimeout) {
-            clearTimeout(this.state.autoScanTimeout);
-            this.state.autoScanTimeout = null;
-        }
-
-        this.ui.createButton = null;
-        this.restoreAllKeybinds();
-    }
-
-    // State Management
-    startScanning() {
-        this.state.isScanning = true;
-        this.scanCurrentPage();
-    }
-
-    scanCurrentPage() {
-        const inventory = Player.getOpenedInventory();
-        if (!inventory) {
-            this.state.isScanning = false;
-            return;
-        }
-
-        this.state.scannedPages.add(this.state.currentPage);
-
-        const currentPageItems = new Set();
-        let newItemsFound = 0;
-        let updatedPlaceholders = 0;
-        let renamedItems = 0;
-
-        this.config.slotIndices.forEach((slotIndex) => {
-            const item = inventory.getStackInSlot(slotIndex);
-            if (item && item.getName() !== "Air") {
-                const itemData = this.parseItem(item, slotIndex);
-                if (itemData) {
-                    currentPageItems.add(itemData.name);
-
-                    const existingItem = this.state.cachedItems.find(
-                        (r) => r.name === itemData.name
-                    );
-
-                    if (!existingItem) {
-                        const possibleRename = this.state.cachedItems.find(
-                            (r) =>
-                                r.page === this.state.currentPage &&
-                                r.slotIndex === slotIndex &&
-                                r.name !== itemData.name
-                        );
-
-                        if (possibleRename) {
-                            if (renamedItems < 2) {
-                                ChatLib.chat(
-                                    PREFIX +
-                                        `§6Detected rename: "${possibleRename.name}" → "${itemData.name}"`
-                                );
-                            }
-
-                            Object.assign(possibleRename, itemData);
-                            renamedItems++;
-                        } else {
-                            this.state.cachedItems.push(itemData);
-                            newItemsFound++;
-                        }
-                    } else if (existingItem.isPlaceholder) {
-                        Object.assign(existingItem, itemData);
-                        existingItem.isPlaceholder = false;
-                        updatedPlaceholders++;
-                    } else {
-                        Object.assign(existingItem, itemData);
-                    }
-                }
-            }
-        });
-
-        // Check for deleted items
-        const deletedItems = this.state.cachedItems.filter(
-            (r) =>
-                r.page === this.state.currentPage &&
-                !r.isPlaceholder &&
-                !currentPageItems.has(r.name)
-        );
-
-        if (deletedItems.length > 0) {
-            deletedItems.forEach((item) => {
-                if (deletedItems.length <= 2) {
-                    ChatLib.chat(
-                        PREFIX + `§cDeleted item detected: "${item.name}"`
-                    );
-                }
-                const index = this.state.cachedItems.indexOf(item);
-                if (index > -1) {
-                    this.state.cachedItems.splice(index, 1);
-                }
-            });
-        }
-
-        // Log results for auto-scanning
-        if (this.state.isAutoScanning) {
-            let message = `§bPage ${this.state.currentPage}:`;
-            if (newItemsFound > 0) message += ` +${newItemsFound} new`;
-            if (updatedPlaceholders > 0)
-                message += ` ~${updatedPlaceholders} updated`;
-
-            if (renamedItems > 0 && renamedItems <= 2)
-                message += ` ↻${renamedItems} renamed`;
-
-            if (deletedItems.length > 0 && deletedItems.length <= 2)
-                message += ` -${deletedItems.length} deleted`;
-
-            message += ` (Total: ${this.state.cachedItems.length})`;
-
-            if (
-                newItemsFound > 0 ||
-                updatedPlaceholders > 0 ||
-                (renamedItems > 0 && renamedItems <= 2) ||
-                (deletedItems.length > 0 && deletedItems.length <= 2)
-            ) {
-                ChatLib.chat(PREFIX + message);
-                World.playSound("random.orb", 1, 2);
-            }
-        } else {
-            let message = `§aPage ${this.state.currentPage} scan complete.`;
-            if (newItemsFound > 0)
-                message += ` Found ${newItemsFound} new items.`;
-            if (updatedPlaceholders > 0)
-                message += ` Updated ${updatedPlaceholders} placeholders.`;
-
-            if (renamedItems > 0 && renamedItems <= 2)
-                message += ` Detected ${renamedItems} renames.`;
-
-            if (deletedItems.length > 0 && deletedItems.length <= 2)
-                message += ` Removed ${deletedItems.length} deleted items.`;
-
-            message += ` Total: ${this.state.cachedItems.length}`;
-
-            if (
-                newItemsFound > 0 ||
-                updatedPlaceholders > 0 ||
-                (renamedItems > 0 && renamedItems <= 2) ||
-                (deletedItems.length > 0 && deletedItems.length <= 2)
-            ) {
-                ChatLib.chat(PREFIX + message);
-            }
-        }
-
-        this.updateFilteredItems();
-
-        if (!this.state.isActive) {
-            this.state.isActive = true;
-            this.ui.initializeTextField = true;
-            this.disableAllKeybinds();
-        }
-
-        this.state.isScanning = false;
-
-        if (
-            this.state.scannedPages.size < this.state.totalPages &&
-            !this.state.isAutoScanning
-        ) {
-            const unscannedPages = [];
-            for (let i = 1; i <= this.state.totalPages; i++) {
-                if (!this.state.scannedPages.has(i)) {
-                    unscannedPages.push(i);
-                }
-            }
-        }
-    }
-
-    // Advanced scanning methods
-    startAutoScan() {
-        if (this.state.isAutoScanning || !this.state.isActive) return;
-
-        this.state.isAutoScanning = true;
-
-        const inventory = Player.getOpenedInventory();
-        const previousPageItem = inventory.getStackInSlot(45);
-
-        if (previousPageItem && previousPageItem.getName() !== "Air") {
-            inventory.click(45, false, "RIGHT");
-        }
-
-        ChatLib.chat(PREFIX + `§bStarting auto-scan of all pages...`);
-        this.state.autoScanTimeout = setTimeout(
-            () => this.continueAutoScan(),
-            100
-        );
-    }
-
-    stopAutoScan() {
-        if (!this.state.isAutoScanning) return;
-
-        this.state.isAutoScanning = false;
-        if (this.state.autoScanTimeout) {
-            clearTimeout(this.state.autoScanTimeout);
-            this.state.autoScanTimeout = null;
-        }
-
-        ChatLib.chat(
-            PREFIX +
-                `§eAuto-scan stopped. Scanned ${this.state.scannedPages.size}/${this.state.totalPages} pages.`
-        );
-    }
-
-    continueAutoScan() {
-        if (!this.state.isAutoScanning) return;
-
-        const inventory = Player.getOpenedInventory();
-        if (!inventory) {
-            this.state.autoScanTimeout = setTimeout(
-                () => this.continueAutoScan(),
-                200
-            );
-            return;
-        }
-
-        if (!this.state.scannedPages.has(this.state.currentPage)) {
-            this.scanCurrentPage();
-        }
-
-        const nextPageItem = inventory.getStackInSlot(53);
-
-        if (nextPageItem && nextPageItem.getName() !== "Air") {
-            inventory.click(53, false, "LEFT");
-            this.state.autoScanTimeout = setTimeout(
-                () => this.continueAutoScan(),
-                500
-            );
-            return;
-        }
-
-        ChatLib.chat(
-            PREFIX +
-                `§aAuto-scan complete! Scanned all ${this.state.totalPages} pages with ${this.state.cachedItems.length} total items.`
-        );
-        this.state.isAutoScanning = false;
-        this.refreshPlaceholderItems();
-    }
-
-    refreshPlaceholderItems() {
-        const placeholders = this.state.cachedItems.filter(
-            (r) => r.isPlaceholder
-        );
-        if (placeholders.length > 0) {
-            ChatLib.chat(
-                PREFIX +
-                    `§e${placeholders.length} placeholder item(s) detected. Consider rescanning to get full data.`
-            );
-        }
-    }
-
-    areAllPagesScanned() {
-        if (this.state.scannedPages.size === 0) return false;
-        if (this.state.totalPages === 0 || this.state.totalPages === 999) {
-            return false;
-        }
-        return this.state.scannedPages.size >= this.state.totalPages;
-    }
-
-    getScannedPagesDisplay() {
-        if (this.state.totalPages === 999) {
-            return `(${this.state.scannedPages.size}/?)`;
-        } else if (this.state.totalPages === 0) {
-            return `(${this.state.scannedPages.size}/?)`;
-        } else {
-            return `(${this.state.scannedPages.size}/${this.state.totalPages})`;
-        }
-    }
-
     // Rendering Methods
     renderOverlay() {
         try {
@@ -1708,7 +1753,7 @@ class BaseInventoryCache {
                 (f) => f.isPlaceholder
             ).length;
             const scannedInfo = this.getScannedPagesDisplay();
-            let title = `${PREFIX}${this.config.title} (${this.state.cachedItems.length}) ${scannedInfo}`;
+            let title = `${PREFIX}${this.config.title} ${scannedInfo}`;
             if (placeholderCount > 0) title += ` §e[${placeholderCount} new]`;
 
             const titleWidth = Renderer.getStringWidth(title);
@@ -2078,6 +2123,7 @@ class BaseInventoryCache {
             }
         }
     }
+
     // Default item rendering - override in subclasses for custom rendering
     renderListItem(
         item,
@@ -2093,6 +2139,33 @@ class BaseInventoryCache {
             itemX + 8,
             itemY + (itemHeight - 8) / 2
         );
+    }
+
+    // State Management
+    clearCache() {
+        this.state.cachedItems = [];
+        this.state.filteredItems = [];
+        this.state.isActive = false;
+        this.state.hoveredIndex = -1;
+        this.state.selectedIndex = -1;
+        this.state.scrollOffset = 0;
+        this.state.isScanning = false;
+        this.state.persistentFilterText = "";
+        this.state.scannedPages.clear();
+        this.state.totalPages = 0;
+        this.state.currentPage = 1;
+        this.state.scrollbarDragging = false;
+        this.ui.filterTextField = null;
+        this.ui.initializeTextField = true;
+
+        this.state.isAutoScanning = false;
+        if (this.state.autoScanTimeout) {
+            clearTimeout(this.state.autoScanTimeout);
+            this.state.autoScanTimeout = null;
+        }
+
+        this.ui.createButton = null;
+        this.restoreAllKeybinds();
     }
 
     hideOverlay() {
