@@ -1,6 +1,7 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX } from "../utils/constants";
+import { limitsManager } from "./GlobalLimitsManager";
 importPackage(Packages.org.lwjgl.input);
 
 if (typeof GuiScreen === "undefined") {
@@ -283,7 +284,6 @@ class Dropdown {
 // Base Inventory Cache System
 class BaseInventoryCache {
     constructor(config = {}) {
-        // Configuration with defaults
         this.config = Object.assign(
             {
                 title: "Items",
@@ -311,7 +311,6 @@ class BaseInventoryCache {
             config
         );
 
-        // Override nested objects properly
         if (config.commands) {
             this.config.commands = Object.assign(
                 this.config.commands,
@@ -344,10 +343,6 @@ class BaseInventoryCache {
             scrollbarDragging: false,
             scrollbarDragStartY: 0,
             scrollbarDragStartOffset: 0,
-            totalItems: 0,
-            isReadingLimits: false,
-            limitsBuffer: [],
-            isFirstLoad: true,
         };
 
         // UI Components
@@ -389,7 +384,6 @@ class BaseInventoryCache {
             createButtonDisabled: 0xff666666,
         };
 
-        // Override colors if provided
         if (config.colors) {
             this.colors = Object.assign(this.colors, config.colors);
         }
@@ -565,72 +559,6 @@ class BaseInventoryCache {
                 }
             }
         });
-
-        // Listen for limits response messages (multi-line handling)
-        register("chat", (event) => {
-            const message = ChatLib.getChatMessage(event, true);
-
-            // Start collecting when we see the header
-            if (message.includes("Your Housing Limits:")) {
-                this.state.isReadingLimits = true;
-                this.state.limitsBuffer = [message];
-                cancel(event); // Hide from chat
-                return;
-            }
-
-            // Continue collecting subsequent lines
-            if (this.state.isReadingLimits) {
-                this.state.limitsBuffer.push(message);
-                cancel(event); // Hide from chat
-
-                // After collecting enough lines (adjust count if needed)
-                if (this.state.limitsBuffer.length >= 17) {
-                    this.state.isReadingLimits = false;
-
-                    this.parseLimitsBuffer();
-                }
-            }
-        });
-    }
-
-    parseLimitsBuffer() {
-        const lines = this.state.limitsBuffer;
-        let targetLine = "";
-
-        // Find the relevant line based on title
-        switch (this.config.title.toLowerCase()) {
-            case "functions":
-                targetLine = lines.find((l) => l.includes("Functions:"));
-                break;
-            case "custom menus":
-                targetLine = lines.find((l) => l.includes("Custom Menus:"));
-                break;
-            case "regions":
-                targetLine = lines.find((l) => l.includes("Regions:"));
-                break;
-            case "commands":
-                targetLine = lines.find((l) => l.includes("Custom Commands:"));
-                break;
-        }
-
-        if (targetLine) {
-            const matchWithCodes = targetLine.match(
-                /(\d+)(?:§.)*\s*\/\s*(?:§.)*(\d+)/
-            );
-            if (matchWithCodes) {
-                this.state.totalItems = parseInt(matchWithCodes[2]); // Second number = max limit
-                this.updateFilteredItems();
-            } else {
-                // Fallback: just grab the first two numbers we find
-                const allNumbers = targetLine.match(/\d+/g);
-                if (allNumbers && allNumbers.length >= 2) {
-                    this.state.totalItems = parseInt(allNumbers[1]);
-                    this.updateFilteredItems();
-                }
-            }
-        }
-
-        this.state.limitsBuffer = [];
     }
 
     // Utility Methods
@@ -738,34 +666,16 @@ class BaseInventoryCache {
         const cleanTitle = title ? title.replace(/§[0-9a-fk-or]/g, "") : "";
 
         if (this.config.inventoryPattern.test(cleanTitle)) {
-            // Send silent packet on first open
-            try {
-                const C01PacketChatMessage = Java.type(
-                    "net.minecraft.network.play.client.C01PacketChatMessage"
-                );
-                Client.sendPacket(new C01PacketChatMessage("/limits"));
-            } catch (e) {
-                ChatLib.command("limits", true);
-            }
+            // Request limits with callback
+            limitsManager.requestLimits((limits) => {
+                this.state.totalItems = limits[this.config.title] || 0;
+                this.updateFilteredItems();
+            });
 
-            // Start normal GUI initialization after a small delay
             setTimeout(() => {
                 this.detectPageInfo(cleanTitle, inventory);
                 this.startScanning();
             }, 50);
-        }
-    }
-
-    requestLimits() {
-        try {
-            // Use actual chat command packet instead of tab complete
-            const C01PacketChatMessage = Java.type(
-                "net.minecraft.network.play.client.C01PacketChatMessage"
-            );
-            Client.sendPacket(new C01PacketChatMessage("/limits"));
-        } catch (e) {
-            // Fallback to regular command if packet fails
-            ChatLib.command("limits", true);
         }
     }
 
@@ -2124,7 +2034,6 @@ class BaseInventoryCache {
         }
     }
 
-    // Default item rendering - override in subclasses for custom rendering
     renderListItem(
         item,
         itemX,
