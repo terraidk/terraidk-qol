@@ -2,7 +2,7 @@
   "name": "terraidk's QoL",
   "creator": "terraidk",
   "description": "A quality of life CT module that provides shortcut commands and easy to use menus.",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "entry": "index.js",
   "requires": []
 }

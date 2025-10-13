@@ -2,7 +2,6 @@
 
 import { PREFIX } from "../utils/constants";
 import { playFailSound } from "../utils/constants.js";
-import config, { registerToggledCommand } from "../utils/command_config.js";
 
 const reminderFile = new java.io.File(
     "config/ChatTriggers/modules/terraidk-qol/reminders.json"
@@ -128,170 +127,155 @@ register("step", () => {
     }
 }).setDelay(1);
 
-registerToggledCommand(
-    "enableReminders",
-    (...args) => {
-        if (!config.enableReminders) return;
-
-        if (!Array.isArray(args) || args.length < 1) {
-            playFailSound();
-            ChatLib.chat(
-                PREFIX + "&cUsage: /remind <1h 20m | HH:MM[am/pm]> <message>"
-            );
-            return;
-        }
-
-        let parsed = parseTime(args);
-        if (!parsed || parsed.ms <= 0) {
-            playFailSound();
-            ChatLib.chat(PREFIX + "&cInvalid time format!");
-            World.playSound("mob.endermen.portal", 0.5, 0.5);
-            return;
-        }
-
-        let msg = parsed.msg || "Reminder!";
-        let formattedTime = formatDuration(parsed.ms);
-        addReminder(parsed.ms, msg);
+register("command", (...args) => {
+    if (!Array.isArray(args) || args.length < 1) {
+        playFailSound();
         ChatLib.chat(
-            PREFIX +
-                `&aReminder set for &b${formattedTime}&a: &e${msg}&a. &7&o/reminders to view.`
+            PREFIX + "&cUsage: /remind <1h 20m | HH:MM[am/pm]> <message>"
         );
-        World.playSound("random.orb", 0.7, 2);
-    },
-    "remind",
-    ["reminder", "remindme"]
-);
+        return;
+    }
 
-registerToggledCommand(
-    "enableReminderList",
-    (...args) => {
-        if (!config.enableReminderList) return;
+    let parsed = parseTime(args);
+    if (!parsed || parsed.ms <= 0) {
+        playFailSound();
+        ChatLib.chat(PREFIX + "&cInvalid time format!");
+        World.playSound("mob.endermen.portal", 0.5, 0.5);
+        return;
+    }
 
-        if (!Array.isArray(args)) args = [];
+    let msg = parsed.msg || "Reminder!";
+    let formattedTime = formatDuration(parsed.ms);
+    addReminder(parsed.ms, msg);
+    ChatLib.chat(
+        PREFIX +
+            `&aReminder set for &b${formattedTime}&a: &e${msg}&a. &7&o/reminders to view.`
+    );
+    World.playSound("random.orb", 0.7, 2);
+})
+    .setName("remind")
+    .setAliases("reminder", "remindme");
 
-        reminders = reminders.filter(
-            (r) => Date.now() < r.time && !r.triggered
-        );
-        reminders.sort((a, b) => a.time - b.time);
-        saveReminders();
+register("command", (...args) => {
+    if (!Array.isArray(args)) args = [];
 
-        if (args.length === 0) {
-            if (reminders.length === 0) {
-                ChatLib.chat(PREFIX + "&7No active reminders.");
-                World.playSound("note.pling", 1, 2);
-                return;
-            }
+    reminders = reminders.filter((r) => Date.now() < r.time && !r.triggered);
+    reminders.sort((a, b) => a.time - b.time);
+    saveReminders();
 
-            ChatLib.chat(PREFIX + "&aActive Reminders:");
-            reminders.forEach((r, i) => {
-                let timeLeft = r.time - Date.now();
-                let formattedTime = formatDuration(timeLeft);
-                ChatLib.chat(`&b${i + 1}. &e${r.msg} &7(in ${formattedTime})`);
-            });
-            ChatLib.chat(
-                "&7&o/reminders [delete <#> | edit <#> <new message/time> | clearall]"
-            );
+    if (args.length === 0) {
+        if (reminders.length === 0) {
+            ChatLib.chat(PREFIX + "&7No active reminders.");
             World.playSound("note.pling", 1, 2);
             return;
         }
 
-        const sub = args[0].toLowerCase();
-
-        if (sub === "delete" && args[1]) {
-            const idx = parseInt(args[1]) - 1;
-            if (isNaN(idx) || idx < 0 || idx >= reminders.length) {
-                ChatLib.chat(PREFIX + "&cInvalid reminder number.");
-                playFailSound();
-                World.playSound("mob.endermen.portal", 0.5, 0.5);
-                return;
-            }
-            reminders.splice(idx, 1);
-            saveReminders();
-            ChatLib.chat(PREFIX + `&aDeleted reminder #${idx + 1}.`);
-            World.playSound("note.bass", 1, 1);
-            return;
-        }
-
-        if (sub === "edit" && args[1] && args.length > 2) {
-            const idx = parseInt(args[1]) - 1;
-            if (isNaN(idx) || idx < 0 || idx >= reminders.length) {
-                ChatLib.chat(PREFIX + "&cInvalid reminder number.");
-                World.playSound("mob.endermen.portal", 0.5, 0.5);
-                return;
-            }
-
-            const editArgs = args.slice(2);
-            let timeMs = null;
-            let msgParts = [];
-
-            for (let i = 0; i < editArgs.length; i++) {
-                const tryTime = parseTime([editArgs[i]]);
-                if (tryTime && tryTime.ms > 0 && timeMs === null) {
-                    timeMs = tryTime.ms;
-                } else {
-                    msgParts.push(editArgs[i]);
-                }
-            }
-
-            const newMsg = msgParts.join(" ").trim();
-            if (newMsg.length > 0) {
-                reminders[idx].msg = newMsg;
-            }
-
-            if (timeMs !== null) {
-                reminders[idx].time = Date.now() + timeMs;
-            }
-
-            if (timeMs !== null && newMsg.length > 0) {
-                ChatLib.chat(
-                    PREFIX +
-                        `&aEdited reminder #${
-                            idx + 1
-                        }: &e${newMsg} &7(in ${formatDuration(timeMs)})`
-                );
-            } else if (timeMs !== null) {
-                ChatLib.chat(
-                    PREFIX +
-                        `&aEdited reminder #${
-                            idx + 1
-                        } time: &7(in ${formatDuration(timeMs)})`
-                );
-            } else if (newMsg.length > 0) {
-                ChatLib.chat(
-                    PREFIX + `&aEdited reminder #${idx + 1}: &e${newMsg}`
-                );
-            } else {
-                ChatLib.chat(PREFIX + "&cNo valid changes provided.");
-                return;
-            }
-
-            saveReminders();
-            World.playSound("note.harp", 1, 1.2);
-            return;
-        }
-
-        if (sub === "clearall") {
-            const now = Date.now();
-            if (now - lastClearAllAttempt < 10000) {
-                reminders = [];
-                saveReminders();
-                ChatLib.chat(PREFIX + "&eAll reminders cleared.");
-                World.playSound("random.break", 1, 1);
-            } else {
-                lastClearAllAttempt = now;
-                ChatLib.chat(
-                    PREFIX +
-                        "&6Run &b/reminders clearall &6again within 10 seconds to confirm."
-                );
-                World.playSound("note.snare", 1, 1);
-            }
-            return;
-        }
-
+        ChatLib.chat(PREFIX + "&aActive Reminders:");
+        reminders.forEach((r, i) => {
+            let timeLeft = r.time - Date.now();
+            let formattedTime = formatDuration(timeLeft);
+            ChatLib.chat(`&b${i + 1}. &e${r.msg} &7(in ${formattedTime})`);
+        });
         ChatLib.chat(
-            PREFIX +
-                "&cUsage: /reminders [delete <#> | edit <#> <new message/time> | clearall]"
+            "&7&o/reminders [delete <#> | edit <#> <new message/time> | clearall]"
         );
-    },
-    "reminders"
-);
+        World.playSound("note.pling", 1, 2);
+        return;
+    }
+
+    const sub = args[0].toLowerCase();
+
+    if (sub === "delete" && args[1]) {
+        const idx = parseInt(args[1]) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= reminders.length) {
+            ChatLib.chat(PREFIX + "&cInvalid reminder number.");
+            playFailSound();
+            World.playSound("mob.endermen.portal", 0.5, 0.5);
+            return;
+        }
+        reminders.splice(idx, 1);
+        saveReminders();
+        ChatLib.chat(PREFIX + `&aDeleted reminder #${idx + 1}.`);
+        World.playSound("note.bass", 1, 1);
+        return;
+    }
+
+    if (sub === "edit" && args[1] && args.length > 2) {
+        const idx = parseInt(args[1]) - 1;
+        if (isNaN(idx) || idx < 0 || idx >= reminders.length) {
+            ChatLib.chat(PREFIX + "&cInvalid reminder number.");
+            World.playSound("mob.endermen.portal", 0.5, 0.5);
+            return;
+        }
+
+        const editArgs = args.slice(2);
+        let timeMs = null;
+        let msgParts = [];
+
+        for (let i = 0; i < editArgs.length; i++) {
+            const tryTime = parseTime([editArgs[i]]);
+            if (tryTime && tryTime.ms > 0 && timeMs === null) {
+                timeMs = tryTime.ms;
+            } else {
+                msgParts.push(editArgs[i]);
+            }
+        }
+
+        const newMsg = msgParts.join(" ").trim();
+        if (newMsg.length > 0) {
+            reminders[idx].msg = newMsg;
+        }
+
+        if (timeMs !== null) {
+            reminders[idx].time = Date.now() + timeMs;
+        }
+
+        if (timeMs !== null && newMsg.length > 0) {
+            ChatLib.chat(
+                PREFIX +
+                    `&aEdited reminder #${
+                        idx + 1
+                    }: &e${newMsg} &7(in ${formatDuration(timeMs)})`
+            );
+        } else if (timeMs !== null) {
+            ChatLib.chat(
+                PREFIX +
+                    `&aEdited reminder #${idx + 1} time: &7(in ${formatDuration(
+                        timeMs
+                    )})`
+            );
+        } else if (newMsg.length > 0) {
+            ChatLib.chat(PREFIX + `&aEdited reminder #${idx + 1}: &e${newMsg}`);
+        } else {
+            ChatLib.chat(PREFIX + "&cNo valid changes provided.");
+            return;
+        }
+
+        saveReminders();
+        World.playSound("note.harp", 1, 1.2);
+        return;
+    }
+
+    if (sub === "clearall") {
+        const now = Date.now();
+        if (now - lastClearAllAttempt < 10000) {
+            reminders = [];
+            saveReminders();
+            ChatLib.chat(PREFIX + "&eAll reminders cleared.");
+            World.playSound("random.break", 1, 1);
+        } else {
+            lastClearAllAttempt = now;
+            ChatLib.chat(
+                PREFIX +
+                    "&6Run &b/reminders clearall &6again within 10 seconds to confirm."
+            );
+            World.playSound("note.snare", 1, 1);
+        }
+        return;
+    }
+
+    ChatLib.chat(
+        PREFIX +
+            "&cUsage: /reminders [delete <#> | edit <#> <new message/time> | clearall]"
+    );
+}).setName("reminders");

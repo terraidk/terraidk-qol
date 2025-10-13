@@ -1,42 +1,20 @@
 /// <reference types="../CTAutocomplete" />
 
-import config from "../utils/command_config.js";
-
 // Categorized command data
 const CATEGORIES = {
     party: {
         name: "Party Management",
         commands: [
-            {
-                syntax: "/pt <player>",
-                description: "Transfer party to player",
-                configKey: "enablePartyTransfer",
-            },
-            {
-                syntax: "/pd",
-                description: "Disband party",
-                configKey: "enablePartyDisband",
-            },
-            {
-                syntax: "/pw",
-                description: "Warp party",
-                configKey: "enablePartyWarp",
-            },
+            { syntax: "/pt <player>", description: "Transfer party to player" },
+            { syntax: "/pd", description: "Disband party" },
+            { syntax: "/pw", description: "Warp party" },
         ],
     },
     navigation: {
         name: "Navigation",
         commands: [
-            {
-                syntax: "/lh",
-                description: "Lobby housing",
-                configKey: "enableLobbyHousing",
-            },
-            {
-                syntax: "/pcp",
-                description: "Parkour checkpoint",
-                configKey: "enableParkourCheckpoint",
-            },
+            { syntax: "/lh", description: "Lobby housing" },
+            { syntax: "/pcp", description: "Parkour checkpoint" },
         ],
     },
     variables: {
@@ -45,43 +23,21 @@ const CATEGORIES = {
             {
                 syntax: "/var <global|playername> <list|inc|dec|set|unset> <name> [value]",
                 description: "Manage variables",
-                configKey: "enableVariables",
             },
             {
                 syntax: "/selfvar <action> <name> [value]",
                 description: "Manage your variables",
-                configKey: "enableSelfVariables",
             },
         ],
     },
     reminder: {
         name: "Reminders",
         commands: [
-            {
-                syntax: "/remind <time> <message>",
-                description: "Set reminder",
-                configKey: "enableReminders",
-            },
-            {
-                syntax: "/reminders",
-                description: "List reminders",
-                configKey: "enableReminderList",
-            },
-            {
-                syntax: "/reminders delete <#>",
-                description: "Delete reminder",
-                configKey: "enableReminderList",
-            },
-            {
-                syntax: "/reminders edit <#> <text>",
-                description: "Edit reminder",
-                configKey: "enableReminderList",
-            },
-            {
-                syntax: "/reminders clearall",
-                description: "Clear all reminders",
-                configKey: "enableReminderList",
-            },
+            { syntax: "/remind <time> <message>", description: "Set reminder" },
+            { syntax: "/reminders", description: "List reminders" },
+            { syntax: "/reminders delete <#>", description: "Delete reminder" },
+            { syntax: "/reminders edit <#> <text>", description: "Edit reminder" },
+            { syntax: "/reminders clearall", description: "Clear all reminders" },
         ],
     },
     functions: {
@@ -90,33 +46,12 @@ const CATEGORIES = {
             {
                 syntax: "/func <action> <name>",
                 description: "Manage functions (create|run|edit|delete)",
-                configKey: "enableFunc",
             },
-            {
-                syntax: "/fc <name>",
-                description: "Create function",
-                configKey: "enableFuncAliases",
-            },
-            {
-                syntax: "/fr <name>",
-                description: "Run function",
-                configKey: "enableFuncAliases",
-            },
-            {
-                syntax: "/fe <name>",
-                description: "Edit function",
-                configKey: "enableFuncAliases",
-            },
-            {
-                syntax: "/fd <name>",
-                description: "Delete function",
-                configKey: "enableFuncAliases",
-            },
-            {
-                syntax: "/functions",
-                description: "Open functions browser",
-                configKey: null,
-            },
+            { syntax: "/fc <name>", description: "Create function" },
+            { syntax: "/fr <name>", description: "Run function" },
+            { syntax: "/fe <name>", description: "Edit function" },
+            { syntax: "/fd <name>", description: "Delete function" },
+            { syntax: "/functions", description: "Open functions browser" },
         ],
     },
     regions: {
@@ -125,28 +60,11 @@ const CATEGORIES = {
             {
                 syntax: "/region <action> <name>",
                 description: "Manage regions (create|edit|delete)",
-                configKey: "enableRegion",
             },
-            {
-                syntax: "/rc <name>",
-                description: "Create region",
-                configKey: "enableRegionAliases",
-            },
-            {
-                syntax: "/re <name>",
-                description: "Edit region",
-                configKey: "enableRegionAliases",
-            },
-            {
-                syntax: "/rd <name>",
-                description: "Delete region",
-                configKey: "enableRegionAliases",
-            },
-            {
-                syntax: "/regions",
-                description: "Open regions browser",
-                configKey: null,
-            },
+            { syntax: "/rc <name>", description: "Create region" },
+            { syntax: "/re <name>", description: "Edit region" },
+            { syntax: "/rd <name>", description: "Delete region" },
+            { syntax: "/regions", description: "Open regions browser" },
         ],
     },
     commands: {
@@ -155,33 +73,12 @@ const CATEGORIES = {
             {
                 syntax: "/command <action> <name>",
                 description: "Manage commands (create|edit|actions|delete)",
-                configKey: "enableCommand",
             },
-            {
-                syntax: "/cc <name>",
-                description: "Create command",
-                configKey: "enableCommandAliases",
-            },
-            {
-                syntax: "/ce <name>",
-                description: "Edit command",
-                configKey: "enableCommandAliases",
-            },
-            {
-                syntax: "/ca <name>",
-                description: "View actions",
-                configKey: "enableCommandAliases",
-            },
-            {
-                syntax: "/cd <name>",
-                description: "Delete command",
-                configKey: "enableCommandAliases",
-            },
-            {
-                syntax: "/commands",
-                description: "Open commands browser",
-                configKey: null,
-            },
+            { syntax: "/cc <name>", description: "Create command" },
+            { syntax: "/ce <name>", description: "Edit command" },
+            { syntax: "/ca <name>", description: "View actions" },
+            { syntax: "/cd <name>", description: "Delete command" },
+            { syntax: "/commands", description: "Open commands browser" },
         ],
     },
     menus: {
@@ -190,48 +87,19 @@ const CATEGORIES = {
             {
                 syntax: "/menu <action> <name>",
                 description: "Manage menus (create|edit|display|delete)",
-                configKey: "enableMenu",
             },
-            {
-                syntax: "/mc <name>",
-                description: "Create menu",
-                configKey: "enableMenuAliases",
-            },
-            {
-                syntax: "/me <name>",
-                description: "Edit menu",
-                configKey: "enableMenuAliases",
-            },
-            {
-                syntax: "/md <name>",
-                description: "Display menu",
-                configKey: "enableMenuAliases",
-            },
-            {
-                syntax: "/mdel <name>",
-                description: "Delete menu",
-                configKey: "enableMenuAliases",
-            },
-            {
-                syntax: "/menus",
-                description: "Open menus browser",
-                configKey: null,
-            },
+            { syntax: "/mc <name>", description: "Create menu" },
+            { syntax: "/me <name>", description: "Edit menu" },
+            { syntax: "/md <name>", description: "Display menu" },
+            { syntax: "/mdel <name>", description: "Delete menu" },
+            { syntax: "/menus", description: "Open menus browser" },
         ],
     },
     other: {
         name: "Other",
         commands: [
-            {
-                syntax: "/hcs",
-                description: "Scan housing commands",
-                configKey: "enableHousingCommandScan",
-            },
-            {
-                syntax: "/shc",
-                description: "Show scanned commands",
-                configKey: "enableShowHousingCommands",
-            },
+            { syntax: "/hcs", description: "Scan housing commands" },
+            { syntax: "/shc", description: "Show scanned commands" },
         ],
     },
 };
@@ -244,21 +112,13 @@ function showCategoryList() {
 
     categoryKeys.forEach(function (key) {
         const cat = CATEGORIES[key];
-
-        let enabledCount = 0;
-        cat.commands.forEach(function (cmd) {
-            if (!cmd.configKey || config.get(cmd.configKey)) {
-                enabledCount++;
-            }
-        });
-
         ChatLib.chat(
             "  &b" +
                 key +
                 " &7- " +
                 cat.name +
                 " &8(" +
-                enabledCount +
+                cat.commands.length +
                 " commands)"
         );
     });
@@ -276,33 +136,19 @@ function showCategoryHelp(category, filter) {
     }
 
     const cat = CATEGORIES[category];
-    const commands = [];
-
-    // Build list of enabled commands
-    cat.commands.forEach(function(cmd) {
-        if (!cmd.configKey || config.get(cmd.configKey)) {
-            commands.push({
-                syntax: cmd.syntax,
-                description: cmd.description,
-            });
-        }
-    });
-
-    if (commands.length === 0) {
-        ChatLib.chat("&cNo commands found for that category!");
-        return;
-    }
+    let commands = cat.commands;
 
     // Apply filter if provided
-    let filtered = commands;
     if (filter) {
-        filtered = commands.filter(function(cmd) {
-            return cmd.syntax.toLowerCase().indexOf(filter) !== -1 || 
-                   cmd.description.toLowerCase().indexOf(filter) !== -1;
+        commands = commands.filter(function (cmd) {
+            return (
+                cmd.syntax.toLowerCase().indexOf(filter) !== -1 ||
+                cmd.description.toLowerCase().indexOf(filter) !== -1
+            );
         });
     }
 
-    if (filtered.length === 0) {
+    if (commands.length === 0) {
         ChatLib.chat("&cNo commands match that filter!");
         return;
     }
@@ -310,7 +156,7 @@ function showCategoryHelp(category, filter) {
     ChatLib.chat("&8&m----------&r &9[&aterraidk's QoL&9]&r &8&m----------");
     ChatLib.chat("\n&2&l" + cat.name.toUpperCase());
 
-    filtered.forEach(function(cmd) {
+    commands.forEach(function (cmd) {
         ChatLib.chat("&a" + cmd.syntax + " &8- &7" + cmd.description);
     });
 
@@ -322,12 +168,6 @@ register("command", function (command) {
     const args = [];
     for (let i = 1; i < arguments.length; i++) {
         args.push(arguments[i]);
-    }
-
-    // Config command
-    if (command === "config") {
-        config.handleConfigCommand(args);
-        return;
     }
 
     // Help command

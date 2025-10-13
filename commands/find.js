@@ -1,7 +1,6 @@
 /// <reference types="../CTAutocomplete" />
 
 import { PREFIX, playFailSound } from "../utils/constants";
-import { registerToggledCommand } from "../utils/command_config.js";
 
 let housingCommands = new Set();
 let isCapturing = false;
@@ -13,78 +12,69 @@ register("worldLoad", () => {
 });
 
 // Capture housing-specific commands
-registerToggledCommand(
-    "enableHousingCommandScan",
-    () => {
-        if (!World.isLoaded()) {
+register("command", () => {
+    if (!World.isLoaded()) {
+        ChatLib.chat(
+            PREFIX +
+                "&cYou must be in a world to scan for housing commands! &7| &7&oNeed help? -> &b/tqol help"
+        );
+        playFailSound();
+        return;
+    }
+
+    ChatLib.chat(PREFIX + "&aScanning for housing commands...");
+    housingCommands.clear();
+    isCapturing = true;
+
+    // Send tab completion packet directly
+    setTimeout(() => {
+        try {
+            Client.sendPacket(
+                new net.minecraft.network.play.client.C14PacketTabComplete("/")
+            );
+        } catch (e) {
             ChatLib.chat(
                 PREFIX +
-                    "&cYou must be in a world to scan for housing commands! &7| &7&oNeed help? -> &b/tqol help"
+                    "&cFailed to send tab completion packet. Try manually typing &b/ &cand pressing TAB."
             );
-            playFailSound();
-            return;
+            isCapturing = false;
         }
-
-        ChatLib.chat(PREFIX + "&aScanning for housing commands...");
-        housingCommands.clear();
-        isCapturing = true;
-
-        // Send tab completion packet directly
-        setTimeout(() => {
-            try {
-                Client.sendPacket(
-                    new net.minecraft.network.play.client.C14PacketTabComplete(
-                        "/"
-                    )
-                );
-            } catch (e) {
-                ChatLib.chat(
-                    PREFIX +
-                        "&cFailed to send tab completion packet. Try manually typing &b/ &cand pressing TAB."
-                );
-                isCapturing = false;
-            }
-        }, 100);
-    },
-    "hcs",
-    [
+    }, 100);
+})
+    .setName("hcs")
+    .setAliases(
         "hscan",
         "housingcommands",
         "hcommands",
         "housingcommandscan",
-        "scancommands",
-    ]
-);
+        "scancommands"
+    );
 
-registerToggledCommand(
-    "enableShowHousingCommands",
-    () => {
-        if (housingCommands.size === 0) {
-            ChatLib.chat(
-                PREFIX +
-                    "&cNo housing commands found! Use &b/hcs &cto scan first. &7| &7&oNeed help? -> &b/tqol help"
-            );
-            playFailSound();
-            return;
-        }
-
-        ChatLib.chat(PREFIX + "&aHousing Commands Found:");
-        housingCommands.forEach((command) => {
-            ChatLib.chat("&7- &b" + command);
-        });
+register("command", () => {
+    if (housingCommands.size === 0) {
         ChatLib.chat(
             PREFIX +
-                `&aTotal: &b${housingCommands.size} &acustom housing commands`
+                "&cNo housing commands found! Use &b/hcs &cto scan first. &7| &7&oNeed help? -> &b/tqol help"
         );
-    },
-    "shc",
-    [
+        playFailSound();
+        return;
+    }
+
+    ChatLib.chat(PREFIX + "&aHousing Commands Found:");
+    housingCommands.forEach((command) => {
+        ChatLib.chat("&7- &b" + command);
+    });
+    ChatLib.chat(
+        PREFIX + `&aTotal: &b${housingCommands.size} &acustom housing commands`
+    );
+})
+    .setName("shc")
+    .setAliases(
         "showhousingcommands",
         "listhousingcommands",
         "hclist",
-        "customcommandslist",
-    ]
-);
+        "customcommandslist"
+    );
 
 // Listen for tab completion packets to filter housing commands
 register("packetReceived", (packet) => {

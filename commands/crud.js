@@ -3,255 +3,205 @@
 import { PREFIX } from "../utils/constants";
 import { playFailSound } from "../utils/constants.js";
 
-import config, { registerToggledCommand } from "../utils/command_config.js";
+register("command", function (...args) {
+    if (!args || args.length === 0) {
+        playFailSound();
+        ChatLib.chat(PREFIX + "&cUsage: /func <create|run|edit|delete> <name>");
+        return;
+    }
 
-registerToggledCommand(
-    "enableFunc",
-    function (...args) {
-        if (!args || args.length === 0) {
-            playFailSound();
-            ChatLib.chat(
-                PREFIX + "&cUsage: /func <create|run|edit|delete> <name>"
-            );
-            return;
-        }
+    let sub = args[0] ? args[0].toLowerCase() : "";
+    let name = args.slice(1).join(" ");
 
-        let sub = args[0] ? args[0].toLowerCase() : "";
-        let name = args.slice(1).join(" ");
-
-        switch (sub) {
-            case "c":
-            case "create":
-                if (!name) {
-                    playFailSound();
-                    ChatLib.chat(
-                        PREFIX + "&cYou must specify a function name to create"
-                    );
-                    return;
-                }
-                ChatLib.command(`function create ${name}`);
-                break;
-
-            case "r":
-            case "run":
-                if (!name) {
-                    playFailSound();
-                    ChatLib.chat(
-                        PREFIX + "&cYou must specify a function name to run"
-                    );
-                    return;
-                }
-                ChatLib.command(`function run ${name}`);
-                break;
-
-            case "e":
-            case "edit":
-                if (!name) {
-                    playFailSound();
-                    ChatLib.chat(
-                        PREFIX + "&cYou must specify a function name to edit"
-                    );
-                    return;
-                }
-                ChatLib.command(`function edit ${name}`);
-                break;
-
-            case "d":
-            case "del":
-            case "delete":
-                if (!name) {
-                    playFailSound();
-                    ChatLib.chat(
-                        PREFIX + "&cYou must specify a function name to delete"
-                    );
-                    return;
-                }
-                ChatLib.command(`function delete ${name}`);
-                break;
-
-            default:
+    switch (sub) {
+        case "c":
+        case "create":
+            if (!name) {
                 playFailSound();
                 ChatLib.chat(
-                    PREFIX + "&cUnknown subcommand. Use create, run, or delete."
+                    PREFIX + "&cYou must specify a function name to create"
                 );
-        }
-    },
-    "func"
-);
+                return;
+            }
+            ChatLib.command(`function create ${name}`);
+            break;
+
+        case "r":
+        case "run":
+            if (!name) {
+                playFailSound();
+                ChatLib.chat(
+                    PREFIX + "&cYou must specify a function name to run"
+                );
+                return;
+            }
+            ChatLib.command(`function run ${name}`);
+            break;
+
+        case "e":
+        case "edit":
+            if (!name) {
+                playFailSound();
+                ChatLib.chat(
+                    PREFIX + "&cYou must specify a function name to edit"
+                );
+                return;
+            }
+            ChatLib.command(`function edit ${name}`);
+            break;
+
+        case "d":
+        case "del":
+        case "delete":
+            if (!name) {
+                playFailSound();
+                ChatLib.chat(
+                    PREFIX + "&cYou must specify a function name to delete"
+                );
+                return;
+            }
+            ChatLib.command(`function delete ${name}`);
+            break;
+
+        default:
+            playFailSound();
+            ChatLib.chat(
+                PREFIX + "&cUnknown subcommand. Use create, run, or delete."
+            );
+    }
+}).setName("func");
 
 // /fc, /fr, /fe, /fd
-registerToggledCommand(
-    "enableFuncAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a function name to create"
-            );
-        }
-        ChatLib.command(`function create ${name}`);
-    },
-    "fc",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a function name to create"
+        );
+    }
+    ChatLib.command(`function create ${name}`);
+}).setName("fc");
 
-registerToggledCommand(
-    "enableFuncAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a function name to run"
-            );
-        }
-        ChatLib.command(`function run ${name}`);
-    },
-    "fr",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a function name to run"
+        );
+    }
+    ChatLib.command(`function run ${name}`);
+}).setName("fr");
 
-registerToggledCommand(
-    "enableFuncAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a function name to edit"
-            );
-        }
-        ChatLib.command(`function edit ${name}`);
-    },
-    "fe",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a function name to edit"
+        );
+    }
+    ChatLib.command(`function edit ${name}`);
+}).setName("fe");
 
-registerToggledCommand(
-    "enableFuncAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a function name to delete"
-            );
-        }
-        ChatLib.command(`function delete ${name}`);
-    },
-    "fd",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a function name to delete"
+        );
+    }
+    ChatLib.command(`function delete ${name}`);
+}).setName("fd");
 
-registerToggledCommand(
-    "enableRegion",
-    function (...args) {
-        if (!args || args.length === 0) {
+register("command", function (...args) {
+    if (!args || args.length === 0) {
+        playFailSound();
+        ChatLib.chat(PREFIX + "&cUsage: /region <create|edit|delete> <name>");
+        return;
+    }
+
+    let sub = args[0] ? args[0].toLowerCase() : "";
+    let name = args.slice(1).join(" ");
+
+    switch (sub) {
+        case "c":
+        case "create":
+            if (!name) {
+                playFailSound();
+                return ChatLib.chat(
+                    PREFIX + "&cYou must specify a region name to create"
+                );
+            }
+            ChatLib.command(`region create ${name}`);
+            break;
+
+        case "e":
+        case "edit":
+            if (!name) {
+                playFailSound();
+                return ChatLib.chat(
+                    PREFIX + "&cYou must specify a region name to edit"
+                );
+            }
+            ChatLib.command(`region edit ${name}`);
+            break;
+
+        case "d":
+        case "del":
+        case "delete":
+            if (!name) {
+                playFailSound();
+                return ChatLib.chat(
+                    PREFIX + "&cYou must specify a region name to delete"
+                );
+            }
+            ChatLib.command(`region delete ${name}`);
+            break;
+
+        default:
             playFailSound();
             ChatLib.chat(
-                PREFIX + "&cUsage: /region <create|edit|delete> <name>"
+                PREFIX + "&cUnknown subcommand. Use create, edit, or delete."
             );
-            return;
-        }
-
-        let sub = args[0] ? args[0].toLowerCase() : "";
-        let name = args.slice(1).join(" ");
-
-        switch (sub) {
-            case "c":
-            case "create":
-                if (!name) {
-                    playFailSound();
-                    return ChatLib.chat(
-                        PREFIX + "&cYou must specify a region name to create"
-                    );
-                }
-                ChatLib.command(`region create ${name}`);
-                break;
-
-            case "e":
-            case "edit":
-                if (!name) {
-                    playFailSound();
-                    return ChatLib.chat(
-                        PREFIX + "&cYou must specify a region name to edit"
-                    );
-                }
-                ChatLib.command(`region edit ${name}`);
-                break;
-
-            case "d":
-            case "del":
-            case "delete":
-                if (!name) {
-                    playFailSound();
-                    return ChatLib.chat(
-                        PREFIX + "&cYou must specify a region name to delete"
-                    );
-                }
-                ChatLib.command(`region delete ${name}`);
-                break;
-
-            default:
-                playFailSound();
-                ChatLib.chat(
-                    PREFIX +
-                        "&cUnknown subcommand. Use create, edit, or delete."
-                );
-        }
-    },
-    "region"
-);
+    }
+}).setName("region");
 
 // /rc, /re, /rd
-registerToggledCommand(
-    "enableRegionAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a region name to create"
-            );
-        }
-        ChatLib.command(`region create ${name}`);
-    },
-    "rc",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a region name to create"
+        );
+    }
+    ChatLib.command(`region create ${name}`);
+}).setName("rc");
 
-registerToggledCommand(
-    "enableRegionAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a region name to edit"
-            );
-        }
-        ChatLib.command(`region edit ${name}`);
-    },
-    "re",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a region name to edit"
+        );
+    }
+    ChatLib.command(`region edit ${name}`);
+}).setName("re");
 
-registerToggledCommand(
-    "enableRegionAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a region name to delete"
-            );
-        }
-        ChatLib.command(`region delete ${name}`);
-    },
-    "rd",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a region name to delete"
+        );
+    }
+    ChatLib.command(`region delete ${name}`);
+}).setName("rd");
 
 // handler for /command and /cmd
 function handleCommand(...args) {
@@ -325,83 +275,55 @@ function handleCommand(...args) {
 }
 
 // /command
-registerToggledCommand(
-    "enableCommand",
-    function (...args) {
-        handleCommand(...args);
-    },
-    "command"
-);
+register("command", function (...args) {
+    handleCommand(...args);
+}).setName("command");
 
 // /cmd
-registerToggledCommand(
-    "enableCommand",
-    function (...args) {
-        handleCommand(...args);
-    },
-    "cmd"
-);
+register("command", function (...args) {
+    handleCommand(...args);
+}).setName("cmd");
 
 // /cc, /ce, /ca, /cd - These don't need fixing since commands don't need multi-word support
-registerToggledCommand(
-    "enableCommandAliases",
-    (name) => {
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a command name to create"
-            );
-        }
-        ChatLib.command(`command create ${name}`);
-    },
-    "cc",
-    true
-);
+register("command", (name) => {
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a command name to create"
+        );
+    }
+    ChatLib.command(`command create ${name}`);
+}).setName("cc");
 
-registerToggledCommand(
-    "enableCommandAliases",
-    (name) => {
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a command name to edit"
-            );
-        }
-        ChatLib.command(`command edit ${name}`);
-    },
-    "ce",
-    true
-);
+register("command", (name) => {
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a command name to edit"
+        );
+    }
+    ChatLib.command(`command edit ${name}`);
+}).setName("ce");
 
-registerToggledCommand(
-    "enableCommandAliases",
-    (name) => {
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a command name to view actions"
-            );
-        }
-        ChatLib.command(`command actions ${name}`);
-    },
-    "ca",
-    true
-);
+register("command", (name) => {
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a command name to view actions"
+        );
+    }
+    ChatLib.command(`command actions ${name}`);
+}).setName("ca");
 
-registerToggledCommand(
-    "enableCommandAliases",
-    (name) => {
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a command name to delete"
-            );
-        }
-        ChatLib.command(`command delete ${name}`);
-    },
-    "cd",
-    true
-);
+register("command", (name) => {
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a command name to delete"
+        );
+    }
+    ChatLib.command(`command delete ${name}`);
+}).setName("cd");
 
 function handleMenu(...args) {
     if (!args || args.length === 0) {
@@ -470,84 +392,54 @@ function handleMenu(...args) {
 }
 
 // /menu
-registerToggledCommand(
-    "enableMenu",
-    function (...args) {
-        handleMenu(...args);
-    },
-    "menu"
-);
+register("command", function (...args) {
+    handleMenu(...args);
+}).setName("menu");
 
 // /mn
-registerToggledCommand(
-    "enableMenu",
-    function (...args) {
-        handleMenu(...args);
-    },
-    "mn"
-);
+register("command", function (...args) {
+    handleMenu(...args);
+}).setName("mn");
 
 // /mc, /me, /md, /mdel
-registerToggledCommand(
-    "enableMenuAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a menu name to create"
-            );
-        }
-        ChatLib.command(`menu create ${name}`);
-    },
-    "mc",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a menu name to create"
+        );
+    }
+    ChatLib.command(`menu create ${name}`);
+}).setName("mc");
 
-registerToggledCommand(
-    "enableMenuAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a menu name to edit"
-            );
-        }
-        ChatLib.command(`menu edit ${name}`);
-    },
-    "me",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(PREFIX + "&cYou must specify a menu name to edit");
+    }
+    ChatLib.command(`menu edit ${name}`);
+}).setName("me");
 
-registerToggledCommand(
-    "enableMenuAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a menu name to display"
-            );
-        }
-        ChatLib.command(`menu display ${name}`);
-    },
-    "md",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a menu name to display"
+        );
+    }
+    ChatLib.command(`menu display ${name}`);
+}).setName("md");
 
-registerToggledCommand(
-    "enableMenuAliases",
-    (...args) => {
-        const name = args.join(" ");
-        if (!name) {
-            playFailSound();
-            return ChatLib.chat(
-                PREFIX + "&cYou must specify a menu name to delete"
-            );
-        }
-        ChatLib.command(`menu delete ${name}`);
-    },
-    "mdel",
-    true
-);
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a menu name to delete"
+        );
+    }
+    ChatLib.command(`menu delete ${name}`);
+}).setName("mdel");
