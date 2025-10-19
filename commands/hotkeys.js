@@ -2,12 +2,10 @@
 
 import { PREFIX } from "../utils/constants";
 import { playFailSound } from "../utils/constants.js";
+import { keybindManager } from "../utils/keybindConfig.js";
 
 if (typeof Keyboard === "undefined") {
     var Keyboard = Java.type("org.lwjgl.input.Keyboard");
-}
-if (typeof KeyBind === "undefined") {
-    var KeyBind = Java.type("com.chattriggers.ctjs.engine.keybind.KeyBind");
 }
 if (typeof GuiScreen === "undefined") {
     var GuiScreen = Java.type("net.minecraft.client.gui.GuiScreen");
@@ -18,41 +16,85 @@ if (typeof Player === "undefined") {
     var Player = Java.type("com.chattriggers.ctjs.minecraft.wrappers.Player");
 }
 
-// Helper function to safely create a keybind
-function createKeyBind(name, key, category) {
-    return new KeyBind(name, key, category);
-}
-
-// Keybinds (unbound by default)
-const functionsKey = createKeyBind("/functions", 0, "terraidk's QoL");
-const commandsKey = createKeyBind("/commands", 0, "terraidk's QoL");
-const regionsKey = createKeyBind("/regions", 0, "terraidk's QoL");
-const eventActionsKey = createKeyBind("/eventactions", 0, "terraidk's QoL");
-const teamsKey = createKeyBind("/teams", 0, "terraidk's QoL");
-const menusKey = createKeyBind("/menus", 0, "terraidk's QoL");
-const backFunctionKey = createKeyBind(
+// Register all keybinds with the manager
+const functionsKey = keybindManager.registerKeybind(
+    "functions",
+    "/functions",
+    "terraidk's QoL"
+);
+const commandsKey = keybindManager.registerKeybind(
+    "commands",
+    "/commands",
+    "terraidk's QoL"
+);
+const regionsKey = keybindManager.registerKeybind(
+    "regions",
+    "/regions",
+    "terraidk's QoL"
+);
+const eventActionsKey = keybindManager.registerKeybind(
+    "eventActions",
+    "/eventactions",
+    "terraidk's QoL"
+);
+const teamsKey = keybindManager.registerKeybind(
+    "teams",
+    "/teams",
+    "terraidk's QoL"
+);
+const menusKey = keybindManager.registerKeybind(
+    "menus",
+    "/menus",
+    "terraidk's QoL"
+);
+const backFunctionKey = keybindManager.registerKeybind(
+    "backFunction",
     "Back to last opened function",
-    0,
     "terraidk's QoL"
 );
-const backCommandKey = createKeyBind(
+const backCommandKey = keybindManager.registerKeybind(
+    "backCommand",
     "Back to last opened command",
-    0,
     "terraidk's QoL"
 );
-const backRegionKey = createKeyBind(
+const backRegionKey = keybindManager.registerKeybind(
+    "backRegion",
     "Back to last opened region",
-    0,
     "terraidk's QoL"
 );
-const backMenuKey = createKeyBind(
+const backMenuKey = keybindManager.registerKeybind(
+    "backMenu",
     "Back to last opened menu",
-    0,
     "terraidk's QoL"
 );
-const backAnythingKey = createKeyBind(
+const backAnythingKey = keybindManager.registerKeybind(
+    "backAnything",
     "Back to last opened anything",
-    0,
+    "terraidk's QoL"
+);
+const editKey = keybindManager.registerKeybind(
+    "editKey",
+    "Edit inhand item",
+    "terraidk's QoL"
+);
+const editLoreKey = keybindManager.registerKeybind(
+    "editLoreKey",
+    "Edit inhand item lore",
+    "terraidk's QoL"
+);
+const editActionKey = keybindManager.registerKeybind(
+    "editActionKey",
+    "Edit inhand item actions",
+    "terraidk's QoL"
+);
+const shortcutMenuKey = keybindManager.registerKeybind(
+    "shortcutMenu",
+    "Shortcut Menu",
+    "terraidk's QoL"
+);
+const goToLastShortcutKey = keybindManager.registerKeybind(
+    "goToLastShortcut",
+    "Go To Last Shortcut Menu",
     "terraidk's QoL"
 );
 
@@ -69,6 +111,9 @@ let prevStates = {
     backRegion: false,
     backMenu: false,
     backAnything: false,
+    editKey: false,
+    editLoreKey: false,
+    editActionKey: false,
 };
 
 // Track different types separately
@@ -79,25 +124,73 @@ let lastOpenedMenu = null;
 
 // Track the most recently opened item of any type
 let lastOpenedAnything = {
-    type: null, // 'function', 'command', 'region', or 'menu'
+    type: null,
     name: null,
     timestamp: 0,
 };
 
-// Tick handler for keybinds
+let pendingEditClick = null;
+
+// Track if we're in the controls menu
+let inControlsMenu = false;
+
+// Monitor when controls menu is opened
+register("guiOpened", (event) => {
+    try {
+        const gui = event.gui;
+        if (gui && gui.getClass().getSimpleName() === "GuiControls") {
+            inControlsMenu = true;
+            keybindManager.startMonitoring();
+        }
+    } catch (e) {
+        // Silent fail
+    }
+});
+
+// Sync keybinds when controls menu is closed
+register("guiClosed", () => {
+    try {
+        const gui = Client.currentGui.get();
+        if (gui && gui.getClass().getSimpleName() === "GuiControls") {
+            inControlsMenu = false;
+            keybindManager.stopMonitoring();
+            if (keybindManager.syncFromMinecraft()) {
+                ChatLib.chat(PREFIX + "§aKeybind settings saved!");
+            }
+        }
+    } catch (e) {
+        // Fallback if we lose track
+        if (inControlsMenu) {
+            inControlsMenu = false;
+            keybindManager.stopMonitoring();
+            keybindManager.syncFromMinecraft();
+        }
+    }
+});
+
+// Tick handler for keybinds and monitoring
 register("tick", () => {
+    // Check for keybind changes while in controls menu
+    if (inControlsMenu) {
+        keybindManager.checkForChanges();
+        return; // Don't process keybind actions while in controls menu
+    }
+
     const states = {
-        functions: functionsKey.isPressed(),
-        commands: commandsKey.isPressed(),
-        regions: regionsKey.isPressed(),
-        eventActions: eventActionsKey.isPressed(),
-        teams: teamsKey.isPressed(),
-        menus: menusKey.isPressed(),
-        backFunction: backFunctionKey.isPressed(),
-        backCommand: backCommandKey.isPressed(),
-        backRegion: backRegionKey.isPressed(),
-        backMenu: backMenuKey.isPressed(),
-        backAnything: backAnythingKey.isPressed(),
+        functions: functionsKey.func_151470_d(),
+        commands: commandsKey.func_151470_d(),
+        regions: regionsKey.func_151470_d(),
+        eventActions: eventActionsKey.func_151470_d(),
+        teams: teamsKey.func_151470_d(),
+        menus: menusKey.func_151470_d(),
+        backFunction: backFunctionKey.func_151470_d(),
+        backCommand: backCommandKey.func_151470_d(),
+        backRegion: backRegionKey.func_151470_d(),
+        backMenu: backMenuKey.func_151470_d(),
+        backAnything: backAnythingKey.func_151470_d(),
+        editKey: editKey.func_151470_d(),
+        editLoreKey: editLoreKey.func_151470_d(),
+        editActionKey: editActionKey.func_151470_d(),
     };
 
     if (states.functions && !prevStates.functions) {
@@ -187,7 +280,6 @@ register("tick", () => {
         }
     }
 
-    // New "back to anything" functionality
     if (states.backAnything && !prevStates.backAnything) {
         if (lastOpenedAnything.type && lastOpenedAnything.name) {
             World.playSound("note.bassattack", 0.7, 2.0);
@@ -230,6 +322,23 @@ register("tick", () => {
         }
     }
 
+    if (states.editKey && !prevStates.editKey) {
+        World.playSound("note.bassattack", 0.7, 2.0);
+        ChatLib.command("edit");
+    }
+
+    if (states.editLoreKey && !prevStates.editLoreKey) {
+        World.playSound("note.bassattack", 0.7, 2.0);
+        pendingEditClick = 30;
+        ChatLib.command("edit");
+    }
+
+    if (states.editActionKey && !prevStates.editActionKey) {
+        World.playSound("note.bassattack", 0.7, 2.0);
+        pendingEditClick = 34;
+        ChatLib.command("edit");
+    }
+
     prevStates = states;
 });
 
@@ -245,7 +354,6 @@ function updateLastOpenedAnything(type, name) {
 function getChestTitle(guiScreen) {
     let title = null;
 
-    // Method 1: Try getTitle().getFormattedText()
     try {
         if (guiScreen.getTitle && guiScreen.getTitle()) {
             const titleComponent = guiScreen.getTitle();
@@ -259,7 +367,6 @@ function getChestTitle(guiScreen) {
         }
     } catch (e) {}
 
-    // Method 2: Try direct string access
     if (!title) {
         try {
             if (guiScreen.inventoryTitle) {
@@ -268,7 +375,6 @@ function getChestTitle(guiScreen) {
         } catch (e) {}
     }
 
-    // Method 3: Try accessing the container
     if (!title) {
         try {
             const container = Player.getContainer();
@@ -278,7 +384,6 @@ function getChestTitle(guiScreen) {
         } catch (e) {}
     }
 
-    // Method 4: Use ChatTriggers' built-in Player.getOpenedInventory()
     if (!title) {
         try {
             const inventory = Player.getOpenedInventory();
@@ -298,11 +403,19 @@ register("guiOpened", (guiEvent) => {
     const className = guiScreen.getClass().getSimpleName();
     if (className !== "GuiChest") return;
 
-    // Add a small delay to ensure the GUI is fully loaded
     setTimeout(() => {
         const title = getChestTitle(guiScreen);
 
         if (!title) return;
+
+        if (title === "Edit Item" && pendingEditClick !== null) {
+            const inventory = Player.getOpenedInventory();
+            if (inventory) {
+                inventory.click(pendingEditClick);
+            }
+            pendingEditClick = null;
+            return;
+        }
 
         if (title.includes("Actions: ")) {
             if (title.includes("Actions: /")) {
@@ -319,7 +432,7 @@ register("guiOpened", (guiEvent) => {
             lastOpenedRegion = regionName;
             updateLastOpenedAnything("region", regionName);
         } else if (title.startsWith("Edit Menu: ")) {
-            const menuName = title.substring(11); // "Edit Menu: ".length = 11
+            const menuName = title.substring(11);
             lastOpenedMenu = menuName;
             updateLastOpenedAnything("menu", menuName);
         }

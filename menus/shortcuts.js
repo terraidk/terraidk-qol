@@ -2,6 +2,7 @@
 
 import { PREFIX } from "../utils/constants";
 import { playFailSound } from "../utils/constants";
+import { keybindManager } from "../utils/keybindConfig.js";
 
 var GLOBAL =
     typeof globalThis !== "undefined"
@@ -19,9 +20,6 @@ var globalThis = GLOBAL;
 if (typeof Keyboard === "undefined") {
     var Keyboard = Java.type("org.lwjgl.input.Keyboard");
 }
-if (typeof KeyBind === "undefined") {
-    var KeyBind = Java.type("com.chattriggers.ctjs.engine.keybind.KeyBind");
-}
 if (typeof GuiScreen === "undefined") {
     var GuiScreen = Java.type("net.minecraft.client.gui.GuiScreen");
 }
@@ -29,10 +27,6 @@ if (typeof ChatLib === "undefined")
     ChatLib = Java.type("com.chattriggers.ctjs.api.ChatLib");
 if (typeof Player === "undefined") {
     var Player = Java.type("com.chattriggers.ctjs.minecraft.wrappers.Player");
-}
-
-function createKeyBind(name, key, category) {
-    return new KeyBind(name, key, category);
 }
 
 class GridMenu {
@@ -842,18 +836,15 @@ function showGoToLastMenu() {
         );
 }
 
-const gridMenuKeybind = createKeyBind("Shortcut Menu", 0, "terraidk's QoL");
-const goToLastMenuKeybind = createKeyBind(
-    "Go To Last Shortcut Menu",
-    0,
-    "terraidk's QoL"
-);
+// INSTEAD, get the already-registered keybinds:
+const gridMenuKeybind = keybindManager.getKeybind("shortcutMenu");
+const goToLastMenuKeybind = keybindManager.getKeybind("goToLastShortcut");
 
 let prevGridMenuState = false;
 let prevGoToLastMenuState = false;
 
 register("tick", () => {
-    const currentState = gridMenuKeybind.isPressed();
+    const currentState = gridMenuKeybind.func_151470_d();
     const currentGui = Client.currentGui.get();
     if (currentState && !prevGridMenuState) {
         if (
@@ -877,7 +868,7 @@ register("tick", () => {
 
 // Go To Last Menu hotkey
 register("tick", () => {
-    const currentState = goToLastMenuKeybind.isPressed();
+    const currentState = goToLastMenuKeybind.func_151470_d();
     const currentGui = Client.currentGui.get();
     if (currentState && !prevGoToLastMenuState) {
         if (

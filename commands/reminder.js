@@ -4,7 +4,7 @@ import { PREFIX } from "../utils/constants";
 import { playFailSound } from "../utils/constants.js";
 
 const reminderFile = new java.io.File(
-    "config/ChatTriggers/modules/terraidk-qol/reminders.json"
+    "config/ChatTriggers/modules/terraidk-qol/json/reminders.json"
 );
 let reminders = loadReminders();
 let lastClearAllAttempt = 0;
