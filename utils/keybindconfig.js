@@ -49,7 +49,7 @@ class KeybindConfigManager {
             return { ...DEFAULT_KEYBINDS, ...parsed };
         } catch (e) {
             ChatLib.chat(
-                "§c[TQoL] Failed to load keybind config: " + e.message
+                PREFIX + "Failed to load keybind config: " + e.message
             );
             return { ...DEFAULT_KEYBINDS };
         }
@@ -61,7 +61,7 @@ class KeybindConfigManager {
             FileLib.write(CONFIG_FILE, json);
         } catch (e) {
             ChatLib.chat(
-                "§c[TQoL] Failed to save keybind config: " + e.message
+                PREFIX + "Failed to save keybind config: " + e.message
             );
         }
     }

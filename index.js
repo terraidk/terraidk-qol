@@ -11,6 +11,7 @@ import "./menus/regions";
 import "./menus/functions";
 import "./menus/custommenus";
 import "./menus/commands";
+import "./menus/layouts";
 import "./menus/anvil";
 import "./commands/find";
 

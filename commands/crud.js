@@ -3,6 +3,10 @@
 import { PREFIX } from "../utils/constants";
 import { playFailSound } from "../utils/constants.js";
 
+if (typeof Keyboard === "undefined") {
+    var Keyboard = Java.type("org.lwjgl.input.Keyboard");
+}
+
 register("command", function (...args) {
     if (!args || args.length === 0) {
         playFailSound();
@@ -443,3 +447,116 @@ register("command", (...args) => {
     }
     ChatLib.command(`menu delete ${name}`);
 }).setName("mdel");
+
+function handleLayout(...args) {
+    if (!args || args.length === 0) {
+        playFailSound();
+        ChatLib.chat(PREFIX + "&cUsage: /layout <create|edit|delete> <name>");
+        return;
+    }
+
+    let sub = args[0] ? args[0].toLowerCase() : "";
+    let name = args.slice(1).join(" ");
+
+    switch (sub) {
+        case "c":
+        case "create":
+            if (!name) {
+                playFailSound();
+                return ChatLib.chat(
+                    PREFIX + "&cYou must specify a layout name to create"
+                );
+            }
+            ChatLib.command(`layout create ${name}`);
+            break;
+
+        case "e":
+        case "edit":
+            if (!name) {
+                playFailSound();
+                return ChatLib.chat(
+                    PREFIX + "&cYou must specify a layout name to edit"
+                );
+            }
+            ChatLib.command(`layout edit ${name}`);
+            break;
+
+        case "d":
+        case "del":
+        case "delete":
+            if (!name) {
+                playFailSound();
+                return ChatLib.chat(
+                    PREFIX + "&cYou must specify a layout name to delete"
+                );
+            }
+            ChatLib.command(`layout delete ${name}`);
+            break;
+
+        default:
+            playFailSound();
+            ChatLib.chat(
+                PREFIX + "&cUnknown subcommand. Use create, edit, or delete."
+            );
+    }
+}
+
+// /layout
+register("command", function (...args) {
+    handleLayout(...args);
+}).setName("layout");
+
+// /lc, /le, /ld
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a layout name to create"
+        );
+    }
+    ChatLib.command(`layout create ${name}`);
+}).setName("lc");
+
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a layout name to edit"
+        );
+    }
+    ChatLib.command(`layout edit ${name}`);
+}).setName("le");
+
+register("command", (...args) => {
+    const name = args.join(" ");
+    if (!name) {
+        playFailSound();
+        return ChatLib.chat(
+            PREFIX + "&cYou must specify a layout name to delete"
+        );
+    }
+    ChatLib.command(`layout delete ${name}`);
+}).setName("ld");
+
+register("chat", (message, event) => {
+    if (
+        message.includes(
+            "Please use the chat to provide the value you wish to set"
+        )
+    ) {
+        try {
+            ChatLib.command("chat a");
+            const mc = Client.getMinecraft();
+            const keyBindChat = mc.field_71474_y.field_74310_D; // gameSettings.keyBindChat
+            const chatKeyCode = keyBindChat.func_151463_i(); // getKeyCode()
+
+            const KeyBinding = Java.type(
+                "net.minecraft.client.settings.KeyBinding"
+            );
+            KeyBinding.func_74510_a(chatKeyCode, true); // setKeyBindState(keyCode, true)
+            KeyBinding.func_74507_a(chatKeyCode); // onTick(keyCode)
+        } catch (e) {}
+    }
+}).setCriteria("${message}");

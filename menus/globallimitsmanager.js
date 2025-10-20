@@ -7,6 +7,7 @@ class GlobalLimitsManager {
             "Custom Menus": 0,
             Regions: 0,
             Commands: 0,
+            "Inventory Layouts": 0,
         };
         this.cached = false;
         this.isRequesting = false;
@@ -88,6 +89,7 @@ class GlobalLimitsManager {
         this.limits["Custom Menus"] = parseLimit("Custom Menus:");
         this.limits.Regions = parseLimit("Regions:");
         this.limits.Commands = parseLimit("Custom Commands:");
+        this.limits["Inventory Layouts"] = parseLimit("Inventory Layouts:");
 
         this.cached = true;
         this.isRequesting = false;
@@ -129,6 +131,7 @@ class GlobalLimitsManager {
             "Custom Menus": 0,
             Regions: 0,
             Commands: 0,
+            "Inventory Layouts": 0,
         };
         this.cached = false;
         this.isRequesting = false;
