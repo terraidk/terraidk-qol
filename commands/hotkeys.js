@@ -52,6 +52,11 @@ const layoutsKey = keybindManager.registerKeybind(
     "/layouts",
     "terraidk's QoL"
 );
+const scoreboardKey = keybindManager.registerKeybind(
+    "scoreboard",
+    "/scoreboard",
+    "terraidk's QoL"
+);
 const backFunctionKey = keybindManager.registerKeybind(
     "backFunction",
     "Back to last opened function",
@@ -112,6 +117,7 @@ let prevStates = {
     teams: false,
     menus: false,
     layouts: false,
+    scoreboard: false,
     backFunction: false,
     backCommand: false,
     backRegion: false,
@@ -190,6 +196,7 @@ register("tick", () => {
         teams: teamsKey.func_151470_d(),
         menus: menusKey.func_151470_d(),
         layouts: layoutsKey.func_151470_d(),
+        scoreboard: scoreboardKey.func_151470_d(),
         backFunction: backFunctionKey.func_151470_d(),
         backCommand: backCommandKey.func_151470_d(),
         backRegion: backRegionKey.func_151470_d(),
@@ -234,6 +241,11 @@ register("tick", () => {
         World.playSound("note.bassattack", 0.7, 2.0);
         ChatLib.chat(PREFIX + "Opening layouts...");
         ChatLib.command("layouts");
+    }
+    if (states.scoreboard && !prevStates.scoreboard) {
+        World.playSound("note.bassattack", 0.7, 2.0);
+        ChatLib.chat(PREFIX + "Opening scoreboard...");
+        ChatLib.command("scoreboard");
     }
 
     if (states.backFunction && !prevStates.backFunction) {
