@@ -1,8 +1,37 @@
 /// <reference types="../CTAutocomplete" />
 
-import { PREFIX } from "../utils/constants";
-import { playFailSound } from "../utils/constants";
+import { PREFIX, playFailSound } from "../utils/constants";
 import { keybindManager } from "../utils/keybindConfig.js";
+
+const SETTINGS_PATH =
+    "config/ChatTriggers/modules/terraidk-qol/json/shortcutsettings.json";
+
+function readSettings() {
+    try {
+        if (!FileLib.exists(SETTINGS_PATH)) return null;
+        const content = FileLib.read(SETTINGS_PATH);
+        if (!content || !content.trim()) return null;
+        return JSON.parse(content);
+    } catch (e) {
+        ChatLib.chat(PREFIX + "§cFailed to load shortcut settings: " + e);
+        return null;
+    }
+}
+
+function writeSettings(settings) {
+    try {
+        const json = JSON.stringify(settings, null, 2);
+        FileLib.write(SETTINGS_PATH, json);
+    } catch (e) {
+        ChatLib.chat(PREFIX + "§cFailed to save shortcut settings: " + e);
+    }
+}
+
+function ensureSettingsFile(defaults) {
+    if (!FileLib.exists(SETTINGS_PATH)) {
+        writeSettings(defaults);
+    }
+}
 
 var globalThis = this;
 
@@ -15,6 +44,32 @@ class WheelMenu {
         this.selectedButton = -1;
         this.radius = 150;
         this.sliceSegments = 32;
+        this.buttonStates = {};
+        this.loadButtonStates();
+    }
+
+    loadButtonStates() {
+        const loaded = readSettings();
+        if (loaded && typeof loaded === "object") {
+            this.buttonStates = loaded;
+        } else {
+            // fallback to defaults if file is missing or invalid
+            this.buttonStates = {
+                Functions: true,
+                Commands: true,
+                Regions: true,
+                Menus: true,
+                "Go To Last": true,
+                Layouts: true,
+                Scoreboard: true,
+                Teams: true,
+                "Event Actions": true,
+            };
+        }
+    }
+
+    saveButtonStates() {
+        writeSettings(this.buttonStates);
     }
 
     setTitle(title) {
@@ -22,64 +77,56 @@ class WheelMenu {
         return this;
     }
 
-    addButton(text, description, callback, color = null) {
-        this.buttons.push({
-            text,
-            description,
-            callback,
-            color,
-        });
+    addButton(text, description, callback, color = null, icon = null) {
+        this.buttons.push({ text, description, callback, color, icon });
         return this;
     }
 
     clearButtons() {
-        this.buttons = [];
+        this.buttons.length = 0;
         return this;
     }
 
     open() {
         if (this.isOpen) return;
-
         this.isOpen = true;
         this.selectedButton = -1;
-
         const gui = new Gui();
-
         gui.registerDraw(() => {
             if (!this.isOpen) return;
-
             const screenWidth = Renderer.screen.getWidth();
             const screenHeight = Renderer.screen.getHeight();
             const centerX = screenWidth / 2;
             const centerY = screenHeight / 2;
             const mouseX = Client.getMouseX();
             const mouseY = Client.getMouseY();
-
-            // Dim the background
             Renderer.drawRect(0xe0000000, 0, 0, screenWidth, screenHeight);
-
-            // Mouse angle from center
             const dx = mouseX - centerX;
             const dy = mouseY - centerY;
             const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
             let mouseAngle = Math.atan2(dy, dx);
-
-            // Figure out which slice is hovered
             let hoveredButton = null;
-            const anglePerButton = (Math.PI * 2) / this.buttons.length;
-            const startAngle = -Math.PI / 2; // Start from top
+            const buttonCount = this.buttons.length;
+            const anglePerButton =
+                buttonCount > 0 ? (Math.PI * 2) / buttonCount : Math.PI * 2;
+            const startAngle = -Math.PI / 2;
             const innerRadius = 60;
             const outerRadius = this.radius;
-
-            // Draw each wheel slice
+            if (buttonCount === 1) {
+                if (
+                    distanceFromCenter >= innerRadius &&
+                    distanceFromCenter <= outerRadius
+                ) {
+                    this.selectedButton = 0;
+                } else {
+                    this.selectedButton = -1;
+                }
+            }
             this.buttons.forEach((button, index) => {
                 const buttonAngle = startAngle + anglePerButton * index;
                 const buttonEndAngle = buttonAngle + anglePerButton;
-
                 const fillColor =
                     ((button.color ?? 0xff404040) & 0x00ffffff) | 0xff000000;
-
-                // Check if mouse is over this slice
                 let isHovered = false;
                 if (
                     distanceFromCenter >= innerRadius &&
@@ -104,48 +151,34 @@ class WheelMenu {
                         normalizedMouseAngle >= normalizedStartAngle &&
                         normalizedMouseAngle <= normalizedEndAngle;
                 }
-
                 if (button._hoverProgress === undefined)
                     button._hoverProgress = 0;
                 const speed = 0.18;
-                if (isHovered) {
-                    button._hoverProgress +=
-                        (1 - button._hoverProgress) * speed;
-                } else {
-                    button._hoverProgress +=
-                        (0 - button._hoverProgress) * speed;
-                }
+                button._hoverProgress +=
+                    (isHovered ? 1 : 0 - button._hoverProgress) * speed;
                 if (button._hoverProgress < 0.01) button._hoverProgress = 0;
                 if (button._hoverProgress > 0.99) button._hoverProgress = 1;
-
                 let drawOuterRadius = outerRadius + 10 * button._hoverProgress;
                 if (button._hoverProgress > 0.01) {
                     hoveredButton = button;
                     if (isHovered) this.selectedButton = index;
                 }
-
-                // Draw the slice (with possible hover scale)
                 const segments = this.sliceSegments;
                 const angleStep = (buttonEndAngle - buttonAngle) / segments;
                 for (let i = 0; i < segments; i++) {
                     const a1 = buttonAngle + angleStep * i;
                     const a2 = buttonAngle + angleStep * (i + 1);
-
                     const x1 = centerX + Math.cos(a1) * drawOuterRadius;
                     const y1 = centerY + Math.sin(a1) * drawOuterRadius;
                     const x2 = centerX + Math.cos(a2) * drawOuterRadius;
                     const y2 = centerY + Math.sin(a2) * drawOuterRadius;
-
                     const x3 = centerX + Math.cos(a1) * innerRadius;
                     const y3 = centerY + Math.sin(a1) * innerRadius;
                     const x4 = centerX + Math.cos(a2) * innerRadius;
                     const y4 = centerY + Math.sin(a2) * innerRadius;
-
                     Renderer.drawShape(fillColor, [x1, y1], [x2, y2], [x3, y3]);
                     Renderer.drawShape(fillColor, [x2, y2], [x4, y4], [x3, y3]);
                 }
-
-                // Draw highlight overlay if hovered
                 if (button._hoverProgress > 0.01) {
                     const highlightAlpha = Math.floor(
                         0x40 * button._hoverProgress
@@ -154,17 +187,14 @@ class WheelMenu {
                     for (let i = 0; i < segments; i++) {
                         const a1 = buttonAngle + angleStep * i;
                         const a2 = buttonAngle + angleStep * (i + 1);
-
                         const x1 = centerX + Math.cos(a1) * drawOuterRadius;
                         const y1 = centerY + Math.sin(a1) * drawOuterRadius;
                         const x2 = centerX + Math.cos(a2) * drawOuterRadius;
                         const y2 = centerY + Math.sin(a2) * drawOuterRadius;
-
                         const x3 = centerX + Math.cos(a1) * innerRadius;
                         const y3 = centerY + Math.sin(a1) * innerRadius;
                         const x4 = centerX + Math.cos(a2) * innerRadius;
                         const y4 = centerY + Math.sin(a2) * innerRadius;
-
                         Renderer.drawShape(
                             highlightColor,
                             [x1, y1],
@@ -179,17 +209,25 @@ class WheelMenu {
                         );
                     }
                 }
-
-                // Draw button label
                 const midAngle = buttonAngle + anglePerButton / 2;
                 const textRadius = (innerRadius + outerRadius) / 2;
                 const textX = centerX + Math.cos(midAngle) * textRadius;
                 const textY = centerY + Math.sin(midAngle) * textRadius;
-
                 const lines = button.text.split("\n");
-                const totalHeight = lines.length * 10;
+                const iconSize = 16;
+                const iconPadding = 4;
+                const totalHeight = button.icon
+                    ? iconSize + iconPadding + lines.length * 10
+                    : lines.length * 10;
                 let currentY = textY - totalHeight / 2;
-
+                if (button.icon) {
+                    const iconX = textX - iconSize / 2;
+                    const iconY = currentY;
+                    try {
+                        new Item(button.icon).draw(iconX, iconY);
+                    } catch (e) {}
+                    currentY += iconSize + iconPadding;
+                }
                 lines.forEach((line) => {
                     const textWidth = Renderer.getStringWidth(line);
                     const textColor = isHovered ? "§e" : "§f";
@@ -201,16 +239,12 @@ class WheelMenu {
                     currentY += 10;
                 });
             });
-
-            // Draw menu title in the center
             const titleWidth = Renderer.getStringWidth(this.title);
             Renderer.drawStringWithShadow(
                 "§f" + this.title,
                 centerX - titleWidth / 2,
                 centerY - 6
             );
-
-            // Show tooltip for hovered button
             if (hoveredButton && hoveredButton.description) {
                 this.drawTooltip(
                     hoveredButton.description,
@@ -220,74 +254,58 @@ class WheelMenu {
                     screenHeight
                 );
             }
-
-            // Show usage instructions at the bottom
             const instructions =
                 "ESC or click outside the wheel to close • Report bugs to terraidk on Discord";
             const instrX =
                 (screenWidth - Renderer.getStringWidth(instructions)) / 2;
             const instrY = screenHeight - 40;
             Renderer.drawStringWithShadow("§7" + instructions, instrX, instrY);
-
             const cautionText =
                 "§eNOTE: The speed of the buttons is dependant on your ping!";
             const cautionX =
                 (screenWidth - Renderer.getStringWidth(cautionText)) / 2;
             const cautionY = screenHeight - 25;
             Renderer.drawStringWithShadow(cautionText, cautionX, cautionY);
-
-            // Draw Discord RPC toggle in bottom right
-            const toggleWidth = 50;
-            const toggleHeight = 22;
-            const toggleX = screenWidth - toggleWidth - 20;
-            const toggleY = screenHeight - toggleHeight - 20;
-
+            // RPC toggle
+            const rpcWidth = 50;
+            const rpcHeight = 22;
+            const rpcX = 20;
+            const rpcY = screenHeight - rpcHeight - 20;
             Renderer.drawRect(
                 0xff111111,
-                toggleX - 2,
-                toggleY - 2,
-                toggleWidth + 4,
-                toggleHeight + 4
+                rpcX - 2,
+                rpcY - 2,
+                rpcWidth + 4,
+                rpcHeight + 4
             );
-            Renderer.drawRect(
-                0xff212121,
-                toggleX,
-                toggleY,
-                toggleWidth,
-                toggleHeight
-            );
-
+            Renderer.drawRect(0xff212121, rpcX, rpcY, rpcWidth, rpcHeight);
             const rpcEnabled =
                 typeof globalThis.discordRPCControl !== "undefined" &&
                 typeof globalThis.discordRPCControl.isEnabled === "function"
                     ? globalThis.discordRPCControl.isEnabled()
                     : true;
-
-            const label = rpcEnabled ? "RPC" : "RPC";
-            const labelColor = rpcEnabled ? "§a" : "§c";
+            const rpcLabelColor = rpcEnabled ? "§a" : "§c";
             Renderer.drawStringWithShadow(
-                labelColor + label,
-                toggleX + 8,
-                toggleY + 8
+                rpcLabelColor + "RPC",
+                rpcX + 8,
+                rpcY + 8
             );
-
-            const indicatorSize = 10;
-            const indicatorX = toggleX + toggleWidth - 18;
-            const indicatorY = toggleY + (toggleHeight - indicatorSize) / 2;
-            const indicatorColor = rpcEnabled ? 0xff2e7d32 : 0xffe74c3c;
+            const rpcIndicatorSize = 10;
+            const rpcIndicatorX = rpcX + rpcWidth - 18;
+            const rpcIndicatorY = rpcY + (rpcHeight - rpcIndicatorSize) / 2;
+            const rpcIndicatorColor = rpcEnabled ? 0xff2e7d32 : 0xffe74c3c;
             Renderer.drawRect(
-                indicatorColor,
-                indicatorX,
-                indicatorY,
-                indicatorSize,
-                indicatorSize
+                rpcIndicatorColor,
+                rpcIndicatorX,
+                rpcIndicatorY,
+                rpcIndicatorSize,
+                rpcIndicatorSize
             );
-
             if (
-                mouseX >= toggleX &&
-                mouseX <= toggleX + toggleWidth &&
-                mouseY >= toggleY &&
-                mouseY <= toggleY + toggleHeight
+                mouseX >= rpcX &&
+                mouseX <= rpcX + rpcWidth &&
+                mouseY >= rpcY &&
+                mouseY <= rpcY + rpcHeight
             ) {
                 this.drawTooltip(
                     rpcEnabled
@@ -299,26 +317,32 @@ class WheelMenu {
                     screenHeight
                 );
             }
+            this.drawSideMenu(screenWidth, screenHeight, mouseX, mouseY);
         });
-
         gui.registerClicked((mouseX, mouseY, button) => {
             const screenWidth = Renderer.screen.getWidth();
             const screenHeight = Renderer.screen.getHeight();
             const centerX = screenWidth / 2;
             const centerY = screenHeight / 2;
-
-            // Handle toggle click
-            const toggleWidth = 50;
-            const toggleHeight = 22;
-            const toggleX = screenWidth - toggleWidth - 20;
-            const toggleY = screenHeight - toggleHeight - 20;
-            const toggleClicked =
-                mouseX >= toggleX &&
-                mouseX <= toggleX + toggleWidth &&
-                mouseY >= toggleY &&
-                mouseY <= toggleY + toggleHeight;
-
-            if (toggleClicked) {
+            const rpcWidth = 50;
+            const rpcHeight = 22;
+            const rpcX = 20;
+            const rpcY = screenHeight - rpcHeight - 20;
+            const rpcClicked =
+                mouseX >= rpcX &&
+                mouseX <= rpcX + rpcWidth &&
+                mouseY >= rpcY &&
+                mouseY <= rpcY + rpcHeight;
+            let inSideMenu = false;
+            if (this._sideMenuRect) {
+                const { x, y, w, h } = this._sideMenuRect;
+                inSideMenu =
+                    mouseX >= x &&
+                    mouseX <= x + w &&
+                    mouseY >= y &&
+                    mouseY <= y + h;
+            }
+            if (rpcClicked) {
                 if (typeof globalThis.discordRPCControl === "undefined") {
                     ChatLib.chat(
                         PREFIX + "§cDiscord RPC control not available"
@@ -328,20 +352,15 @@ class WheelMenu {
                 }
                 return;
             }
-
             if (button !== 0) return;
-
-            // Check if click is inside the wheel
             const dx = mouseX - centerX;
             const dy = mouseY - centerY;
             const distanceFromCenter = Math.sqrt(dx * dx + dy * dy);
             const innerRadius = 60;
             const outerRadius = this.radius;
-
             if (distanceFromCenter < innerRadius) {
                 return;
             } else if (distanceFromCenter <= outerRadius) {
-                // Clicked a button
                 if (
                     this.selectedButton >= 0 &&
                     this.selectedButton < this.buttons.length
@@ -349,17 +368,23 @@ class WheelMenu {
                     this.executeButton(this.selectedButton);
                     this.close();
                 }
+            } else if (inSideMenu) {
+                this.handleSideMenuClick(
+                    mouseX,
+                    mouseY,
+                    screenWidth,
+                    screenHeight
+                );
+                return;
             } else {
                 this.close();
             }
         });
-
         gui.registerKeyTyped((char, keyCode) => {
             if (keyCode === 1) {
                 this.close();
             }
         });
-
         gui.open();
         this.gui = gui;
     }
@@ -436,6 +461,267 @@ class WheelMenu {
                 tooltipY + 4 + index * 12
             );
         });
+    }
+
+    drawSideMenu(screenWidth, screenHeight, mouseX, mouseY) {
+        if (this.title && this.title.toLowerCase().includes("go to last"))
+            return;
+
+        const toggleWidth = 50;
+        const toggleHeight = 22;
+        const fontSize = Math.max(11, Math.floor(screenHeight / 72));
+        const rowHeight = Math.max(16, Math.floor(screenHeight / 48));
+        const menuPadding = Math.max(8, Math.floor(screenHeight / 108));
+
+        let maxKeyWidth = 0;
+        Object.keys(this.buttonStates).forEach((key) => {
+            if (key === "Go To Last") return;
+            const width = Renderer.getStringWidth(key);
+            if (width > maxKeyWidth) maxKeyWidth = width;
+        });
+        const menuWidth = Math.max(120, maxKeyWidth + 60);
+        const buttonCount = Object.keys(this.buttonStates).filter(
+            (k) => k !== "Go To Last"
+        ).length;
+        const menuHeight = menuPadding * 2 + fontSize + buttonCount * rowHeight;
+
+        // Place menu bottom right
+        const menuX = screenWidth - menuWidth - 20;
+        const menuY = screenHeight - menuHeight - 20;
+
+        // Draw background
+        Renderer.drawRect(0xcc181818, menuX, menuY, menuWidth, menuHeight);
+        Renderer.drawRect(
+            0x80181818,
+            menuX - 3,
+            menuY - 3,
+            menuWidth + 6,
+            menuHeight + 6
+        );
+
+        const toggleText = "§bToggle";
+        const toggleTextWidth = Renderer.getStringWidth("Toggle");
+        Renderer.drawStringWithShadow(
+            toggleText,
+            menuX + (menuWidth - toggleTextWidth) / 2,
+            menuY + menuPadding - 2
+        );
+        let y = menuY + menuPadding + fontSize;
+        Object.keys(this.buttonStates).forEach((key, idx) => {
+            if (key === "Go To Last") return;
+            const enabled = this.buttonStates[key];
+
+            if (
+                mouseX >= menuX &&
+                mouseX <= menuX + menuWidth &&
+                mouseY >= y - 3 &&
+                mouseY <= y + rowHeight - 5
+            ) {
+                Renderer.drawRect(
+                    0x402e7d32,
+                    menuX,
+                    y - 3,
+                    menuWidth,
+                    rowHeight - 1
+                );
+            }
+            Renderer.drawStringWithShadow("§7" + key, menuX + menuPadding, y);
+            const label = enabled ? "§a✔" : "§c✖";
+            Renderer.drawStringWithShadow(
+                label,
+                menuX + menuWidth - menuPadding - 14,
+                y
+            );
+            y += rowHeight;
+        });
+
+        this._sideMenuRect = {
+            x: menuX,
+            y: menuY,
+            w: menuWidth,
+            h: menuHeight,
+        };
+    }
+
+    handleSideMenuClick(mouseX, mouseY, screenWidth, screenHeight) {
+        const fontSize = Math.max(11, Math.floor(screenHeight / 72));
+        const rowHeight = Math.max(16, Math.floor(screenHeight / 48));
+        const menuPadding = Math.max(8, Math.floor(screenHeight / 108));
+        let maxKeyWidth = 0;
+        Object.keys(this.buttonStates).forEach((key) => {
+            if (key === "Go To Last") return;
+            const width = Renderer.getStringWidth(key);
+            if (width > maxKeyWidth) maxKeyWidth = width;
+        });
+        const menuWidth = Math.max(120, maxKeyWidth + 60);
+        const buttonCount = Object.keys(this.buttonStates).filter(
+            (k) => k !== "Go To Last"
+        ).length;
+        const menuHeight = menuPadding * 2 + fontSize + buttonCount * rowHeight;
+
+        const menuX = screenWidth - menuWidth - 20;
+        const menuY = screenHeight - menuHeight - 20;
+
+        let y = menuY + menuPadding + fontSize;
+        let toggled = false;
+        Object.keys(this.buttonStates).forEach((key, idx) => {
+            if (key === "Go To Last") return;
+            if (
+                mouseX >= menuX &&
+                mouseX <= menuX + menuWidth &&
+                mouseY >= y - 3 &&
+                mouseY <= y + rowHeight - 5
+            ) {
+                this.buttonStates[key] = !this.buttonStates[key];
+                toggled = true;
+            }
+            y += rowHeight;
+        });
+        if (toggled) {
+            this.saveButtonStates();
+            this.clearButtons();
+            const mainButtons = [
+                {
+                    key: "Functions",
+                    text: "Functions",
+                    description: "Opens the Functions menu",
+                    callback: () => {
+                        ChatLib.command("functions");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Functions&f...");
+                        this.close();
+                    },
+                    color: 0xffc62828,
+                    icon: "minecraft:activator_rail",
+                },
+                {
+                    key: "Commands",
+                    text: "Commands",
+                    description: "Opens the Commands menu",
+                    callback: () => {
+                        ChatLib.command("commands");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Commands&f...");
+                        this.close();
+                    },
+                    color: 0xfff57c00,
+                    icon: "minecraft:command_block",
+                },
+                {
+                    key: "Regions",
+                    text: "Regions",
+                    description: "Opens the Regions menu",
+                    callback: () => {
+                        ChatLib.command("regions");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Regions&f...");
+                        this.close();
+                    },
+                    color: 0xff388e3c,
+                    icon: "minecraft:grass",
+                },
+                {
+                    key: "Menus",
+                    text: "Menus",
+                    description: "Opens the Custom Menus menu",
+                    callback: () => {
+                        ChatLib.command("menus");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Menus&f...");
+                        this.close();
+                    },
+                    color: 0xff6d4c41,
+                    icon: "minecraft:chest",
+                },
+                {
+                    key: "Go To Last",
+                    text: "Go To\nLast",
+                    description:
+                        "Quick access to your last opened items\nFunctions, Commands, Regions, and Menus",
+                    callback: () => {
+                        World.playSound("random.click", 0.7, 1.0);
+                        setTimeout(() => {
+                            showGoToLastMenu();
+                            this.open();
+                        }, 50);
+                        this.close();
+                    },
+                    color: 0xff424242,
+                    icon: "minecraft:compass",
+                },
+                {
+                    key: "Layouts",
+                    text: "Layouts",
+                    description: "Opens the Layouts menu",
+                    callback: () => {
+                        ChatLib.command("layouts");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Layouts&f...");
+                        this.close();
+                    },
+                    color: 0xff1565c0,
+                    icon: "minecraft:iron_axe",
+                },
+                {
+                    key: "Scoreboard",
+                    text: "Scoreboard",
+                    description: "Opens the Scoreboard Editor",
+                    callback: () => {
+                        ChatLib.command("scoreboard");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Scoreboard&f...");
+                        this.close();
+                    },
+                    color: 0xff6a1b9a,
+                    icon: "minecraft:filled_map",
+                },
+                {
+                    key: "Teams",
+                    text: "Teams",
+                    description: "Opens the Teams menu",
+                    callback: () => {
+                        ChatLib.command("teams");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Teams&f...");
+                        this.close();
+                    },
+                    color: 0xff00838f,
+                    icon: "minecraft:sign",
+                },
+                {
+                    key: "Event Actions",
+                    text: "Event\nActions",
+                    description: "Opens the Event Actions menu",
+                    callback: () => {
+                        ChatLib.command("eventactions");
+                        World.playSound("note.bassattack", 0.7, 2.0);
+                        ChatLib.chat(PREFIX + "Opening &6Event Actions&f...");
+                        this.close();
+                    },
+                    color: 0xffcfabf7,
+                    icon: "minecraft:web",
+                },
+            ];
+            mainButtons.forEach((btn) => {
+                if (this.buttonStates[btn.key]) {
+                    this.addButton(
+                        btn.text,
+                        btn.description,
+                        (...args) => {
+                            btn.callback(...args);
+                            this.close();
+                        },
+                        btn.color,
+                        btn.icon
+                    );
+                }
+            });
+        }
+    }
+
+    reloadSettings() {
+        this.loadButtonStates();
+        this.refresh();
     }
 }
 
@@ -521,57 +807,66 @@ register("guiOpened", (guiEvent) => {
 const wheelMenu = new WheelMenu();
 
 function showMainMenu() {
-    wheelMenu
-        .clearButtons()
-        .setTitle(PREFIX + "Shortcuts")
-        .addButton(
-            "Functions",
-            "Opens the Functions menu",
-            () => {
+    // Button definitions
+    const mainButtons = [
+        {
+            key: "Functions",
+            text: "Functions",
+            description: "Opens the Functions menu",
+            callback: () => {
                 ChatLib.command("functions");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Functions&f...");
                 wheelMenu.close();
             },
-            0xffc62828
-        )
-        .addButton(
-            "Commands",
-            "Opens the Commands menu",
-            () => {
+            color: 0xffc62828,
+            icon: "minecraft:activator_rail",
+        },
+        {
+            key: "Commands",
+            text: "Commands",
+            description: "Opens the Commands menu",
+            callback: () => {
                 ChatLib.command("commands");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Commands&f...");
                 wheelMenu.close();
             },
-            0xfff57c00
-        )
-        .addButton(
-            "Regions",
-            "Opens the Regions menu",
-            () => {
+            color: 0xfff57c00,
+            icon: "minecraft:command_block",
+        },
+        {
+            key: "Regions",
+            text: "Regions",
+            description: "Opens the Regions menu",
+            callback: () => {
                 ChatLib.command("regions");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Regions&f...");
                 wheelMenu.close();
             },
-            0xff388e3c
-        )
-        .addButton(
-            "Menus",
-            "Opens the Custom Menus menu",
-            () => {
+            color: 0xff388e3c,
+            icon: "minecraft:grass",
+        },
+        {
+            key: "Menus",
+            text: "Menus",
+            description: "Opens the Custom Menus menu",
+            callback: () => {
                 ChatLib.command("menus");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Menus&f...");
                 wheelMenu.close();
             },
-            0xff6d4c41
-        )
-        .addButton(
-            "Go To\nLast",
-            "Quick access to your last opened items\nFunctions, Commands, Regions, and Menus",
-            () => {
+            color: 0xff6d4c41,
+            icon: "minecraft:chest",
+        },
+        {
+            key: "Go To Last",
+            text: "Go To\nLast",
+            description:
+                "Quick access to your last opened items\nFunctions, Commands, Regions, and Menus",
+            callback: () => {
                 World.playSound("random.click", 0.7, 1.0);
                 wheelMenu.close();
                 setTimeout(() => {
@@ -579,52 +874,83 @@ function showMainMenu() {
                     wheelMenu.open();
                 }, 50);
             },
-            0xff424242
-        )
-        .addButton(
-            "Layouts",
-            "Opens the Layouts menu",
-            () => {
+            color: 0xff424242,
+            icon: "minecraft:compass",
+        },
+        {
+            key: "Layouts",
+            text: "Layouts",
+            description: "Opens the Layouts menu",
+            callback: () => {
                 ChatLib.command("layouts");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Layouts&f...");
                 wheelMenu.close();
             },
-            0xff1565c0
-        )
-        .addButton(
-            "Scoreboard",
-            "Opens the Scoreboard Editor",
-            () => {
+            color: 0xff1565c0,
+            icon: "minecraft:iron_axe",
+        },
+        {
+            key: "Scoreboard",
+            text: "Scoreboard",
+            description: "Opens the Scoreboard Editor",
+            callback: () => {
                 ChatLib.command("scoreboard");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Scoreboard&f...");
                 wheelMenu.close();
             },
-            0xff6a1b9a
-        )
-        .addButton(
-            "Teams",
-            "Opens the Teams menu",
-            () => {
+            color: 0xff6a1b9a,
+            icon: "minecraft:filled_map",
+        },
+        {
+            key: "Teams",
+            text: "Teams",
+            description: "Opens the Teams menu",
+            callback: () => {
                 ChatLib.command("teams");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Teams&f...");
                 wheelMenu.close();
             },
-            0xff00838f
-        )
-        .addButton(
-            "Event\nActions",
-            "Opens the Event Actions menu",
-            () => {
+            color: 0xff00838f,
+            icon: "minecraft:sign",
+        },
+        {
+            key: "Event Actions",
+            text: "Event\nActions",
+            description: "Opens the Event Actions menu",
+            callback: () => {
                 ChatLib.command("eventactions");
                 World.playSound("note.bassattack", 0.7, 2.0);
                 ChatLib.chat(PREFIX + "Opening &6Event Actions&f...");
                 wheelMenu.close();
             },
-            0xffcfabf7
-        );
+            color: 0xffcfabf7,
+            icon: "minecraft:web",
+        },
+    ];
+
+    // Initialize buttonStates
+    if (Object.keys(wheelMenu.buttonStates).length === 0) {
+        mainButtons.forEach((btn) => {
+            wheelMenu.buttonStates[btn.key] = true;
+        });
+        wheelMenu.saveButtonStates();
+    }
+
+    wheelMenu.clearButtons().setTitle(PREFIX + "Shortcuts");
+    mainButtons.forEach((btn) => {
+        if (btn.key === "Go To Last" || wheelMenu.buttonStates[btn.key]) {
+            wheelMenu.addButton(
+                btn.text,
+                btn.description,
+                btn.callback,
+                btn.color,
+                btn.icon
+            );
+        }
+    });
 }
 
 function showGoToLastMenu() {
@@ -649,7 +975,8 @@ function showGoToLastMenu() {
                     ChatLib.chat(PREFIX + "§cNo function has been opened yet!");
                 }
             },
-            0xffc62828
+            0xffc62828,
+            "minecraft:activator_rail"
         )
         .addButton(
             "Last Region",
@@ -669,7 +996,8 @@ function showGoToLastMenu() {
                     ChatLib.chat(PREFIX + "§cNo region has been opened yet!");
                 }
             },
-            0xff388e3c
+            0xff388e3c,
+            "minecraft:grass"
         )
         .addButton(
             "Back to Main Menu",
@@ -682,7 +1010,8 @@ function showGoToLastMenu() {
                     wheelMenu.open();
                 }, 50);
             },
-            0xff424242
+            0xff424242,
+            "minecraft:arrow"
         )
         .addButton(
             "Last Menu",
@@ -702,7 +1031,8 @@ function showGoToLastMenu() {
                     ChatLib.chat(PREFIX + "§cNo menu has been opened yet!");
                 }
             },
-            0xff6d4c41
+            0xff6d4c41,
+            "minecraft:chest"
         )
         .addButton(
             "Last Command",
@@ -722,7 +1052,8 @@ function showGoToLastMenu() {
                     ChatLib.chat(PREFIX + "§cNo command has been opened yet!");
                 }
             },
-            0xfff57c00
+            0xfff57c00,
+            "minecraft:command_block"
         );
 }
 

@@ -1,0 +1,11 @@
+{
+  "Functions": true,
+  "Commands": true,
+  "Regions": true,
+  "Menus": true,
+  "Go To Last": true,
+  "Layouts": true,
+  "Scoreboard": true,
+  "Teams": true,
+  "Event Actions": true
+}

@@ -11,21 +11,23 @@
    - Place `ChatTriggers-2.2.0.jar` in your `.minecraft/mods/` folder
    - Launch Minecraft once
 
+
 3. **Install terraidk-qol**
-   ```bash
-   1. Download latest release from GitHub
-   2. Extract the zip file
-   3. Move 'terraidk-qol' folder to:
-      .minecraft/config/ChatTriggers/modules/
-   4. Run /ct reload in-game
-   ```
+  ```bash
+  1. Download latest release from GitHub
+  2. Extract the zip file
+  3. **Rename the extracted folder to just `terraidk-qol` (remove any version number from the folder name)**
+  4. Move the `terraidk-qol` folder to:
+    .minecraft/config/ChatTriggers/modules/
+  5. Run /ct reload in-game
+  ```
 
 4. **Initial Setup**
    - Open Minecraft Controls menu
    - Find "terraidk's QoL" section
    - Set up recommended keybinds:
-     - `Shortcut Menu` - Main grid interface
-     - `Go To Last` - Quick return to recent items
+     - `Shortcut Menu` - Main wheel shortcut interface
+     - `Back to last opened anything` - Quick return to recent items
 
 ## Features
 
